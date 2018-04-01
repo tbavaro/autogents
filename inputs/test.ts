@@ -4,6 +4,7 @@ export type Foo = {
   aStringOrUndefined: string | undefined;
   aStringOrNull: string | null;
   aNumber: number;
+  anOptionalStringOrNumberOrNull?: string | number | null;
 };
 
 export interface IBar {

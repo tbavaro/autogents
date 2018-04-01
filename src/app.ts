@@ -5,7 +5,9 @@ import * as TypescriptHelpers from "./TypescriptHelpers";
 function run() {
   const rootNames = ['inputs/test.ts'];
 
-  const options: ts.CompilerOptions = {};
+  const options: ts.CompilerOptions = {
+    strictNullChecks: true
+  };
 
   const program = ts.createProgram(rootNames, options);
 
@@ -23,17 +25,18 @@ function run() {
         console.log("export", symbol.name);
         const validator = TypescriptHelpers.getValidatorFor(stmt, type, typeChecker);
         console.log("validator", JSON.stringify(validator.describe(), null, 2));
-        // type.getProperties().forEach(prop => {
-        //   const propType = typeChecker.getTypeOfSymbolAtLocation(prop, stmt);
+        type.getProperties().forEach(prop => {
+          const propType = typeChecker.getTypeOfSymbolAtLocation(prop, stmt);
 
-        //   console.log(
-        //     "property",
-        //     prop.name,
-        //     prop.flags,
-        //     propType.flags,
-        //     TypescriptHelpers.typeIsPrimitive(propType)
-        //   );
-        // });
+          console.log(
+            "property",
+            prop.name,
+            prop.flags,
+            propType.flags,
+            TypescriptHelpers.typeIsPrimitive(propType),
+            typeChecker.getWidenedType(propType).flags
+          );
+        });
         // TypescriptHelpers.dumpNode(stmt);
         // console.log("type", typeChecker.getTypeAtLocation(stmt));
       });

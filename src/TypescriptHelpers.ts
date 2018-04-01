@@ -381,6 +381,12 @@ const undefinedValidator = new (class extends Validator {
   }
 });
 
+const nullValidator = new (class extends Validator {
+  constructor() {
+    super("NullValidator");
+  }
+});
+
 class OrValidator extends Validator {
   public readonly validators: Validator[];
 
@@ -409,14 +415,10 @@ class ObjectValidator extends Validator {
     this.propertyValidators = new Map();
     properties.forEach(property => {
         const propType = typeChecker.getTypeOfSymbolAtLocation(property, declarationNode);
-        console.log(property.name);
-        let validator = getValidatorFor(declarationNode, propType, typeChecker);
-        if (flagsMatch(property.flags, ts.SymbolFlags.Optional)) {
-          validator = new OrValidator([validator, undefinedValidator]);
-        }
+        // console.log(property.name);
         this.propertyValidators.set(
           property.name,
-          validator
+          getValidatorFor(declarationNode, propType, typeChecker)
         );
 
         // console.log(
@@ -460,13 +462,31 @@ type ReusableValidatorEntry = {
   validator: Validator;
 };
 
-const reusableValidators: ReusableValidatorEntry[] = [];
+const reusableValidators: ReusableValidatorEntry[] = [
+  {
+    predicate: type => flagsMatch(type.flags, ts.TypeFlags.Undefined),
+    validator: undefinedValidator
+  },
+  {
+    predicate: type => flagsMatch(type.flags, ts.TypeFlags.Null),
+    validator: nullValidator
+  }
+];
 primitiveTypeFlagsToTypeOfString.forEach((typeOfString, flag) => {
   reusableValidators.push({
     predicate: ((type: ts.Type) => flagsMatch(type.flags, flag)),
     validator: new PrimitiveValidator(typeOfString)
   });
 });
+
+function getValidatorForUnion(
+  declarationNode: ts.Node,
+  types: ts.Type[],
+  typeChecker: ts.TypeChecker
+) {
+  const validators = types.map(type => getValidatorFor(declarationNode, type, typeChecker));
+  return new OrValidator(validators);
+}
 
 export function getValidatorFor(
   declarationNode: ts.Node,
@@ -475,13 +495,16 @@ export function getValidatorFor(
 ): Validator {
   if (typeIsObject(type)) {
     return new ObjectValidator("some object", declarationNode, type.getProperties(), typeChecker);
+  } else if (flagsMatch(type.flags, ts.TypeFlags.Union)) {
+    const types = (type as ts.UnionOrIntersectionType).types;
+    return getValidatorForUnion(declarationNode, types, typeChecker);
   } else {
     const reusableValidatorEntry = reusableValidators.find(entry => entry.predicate(type));
     if (reusableValidatorEntry) {
       return reusableValidatorEntry.validator;
     } else {
       const typeStr = typeChecker.typeToString(type);
-      throw new Error(`unable to figure out validator for: ${typeStr}`);
+      throw new Error(`unable to figure out validator for: ${typeStr} (${type.flags})`);
     }
   }
 }
