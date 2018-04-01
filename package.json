@@ -29,7 +29,9 @@
     "watch": "npm run build -- --watch",
     "watch:test": "jest --watch"
   },
-  "dependencies": {},
+  "dependencies": {
+    "typescript": "^2.3.0"
+  },
   "devDependencies": {
     "@types/jest": "^22.0.1",
     "@types/node": "^8.0.0",
@@ -40,8 +42,7 @@
     "ts-jest": "^22.0.1",
     "ts-node": "^3.2.0",
     "tslint": "^5.0.0",
-    "tslint-config-prettier": "^1.1.0",
-    "typescript": "^2.3.0"
+    "tslint-config-prettier": "^1.1.0"
   },
   "engines": {
     "node": ">=6.0.0"
