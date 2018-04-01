@@ -1,46 +1,20 @@
-import * as ts from 'typescript';
+import * as ts from "typescript";
 import * as TypescriptHelpers from "./TypescriptHelpers";
-
+import ValidationGenerator from "./ValidationGenerator";
 
 function run() {
-  const rootNames = ['inputs/test.ts'];
+  const rootNames = ["inputs/test.ts"];
 
-  const options: ts.CompilerOptions = {
-    strictNullChecks: true
-  };
+  const generator = new ValidationGenerator(rootNames);
 
-  const program = ts.createProgram(rootNames, options);
-
-  const typeChecker = program.getTypeChecker();
-
-  program.getSourceFiles().forEach(sourceFile => {
-    if (rootNames.indexOf(sourceFile.fileName) !== -1) {
-      console.log(`============ ${sourceFile.fileName}`);
-      TypescriptHelpers.findExports(sourceFile, program).forEach(stmt => {
-        const type = typeChecker.getTypeAtLocation(stmt);
-        const symbol = type.aliasSymbol || type.symbol;
-        if (symbol === undefined) {
-          throw new Error("can't determine symbol of: " + TypescriptHelpers.describeNode(stmt));
-        }
-        console.log("export", symbol.name);
-        const validator = TypescriptHelpers.getValidatorFor(stmt, type, typeChecker);
-        console.log("validator", JSON.stringify(validator.describe(), null, 2));
-        type.getProperties().forEach(prop => {
-          const propType = typeChecker.getTypeOfSymbolAtLocation(prop, stmt);
-
-          console.log(
-            "property",
-            prop.name,
-            prop.flags,
-            propType.flags,
-            TypescriptHelpers.typeIsPrimitive(propType),
-            typeChecker.getWidenedType(propType).flags
-          );
-        });
-        // TypescriptHelpers.dumpNode(stmt);
-        // console.log("type", typeChecker.getTypeAtLocation(stmt));
-      });
-    }
+  rootNames.forEach(rootName => {
+    console.log(`============ ${rootName}`);
+    const validators = generator.generateValidatorsFor(rootName);
+    const describedValidators: { [propertyName: string]: {} } = {};
+    Object.entries(validators).forEach(([propertyName, validator]) => {
+      describedValidators[propertyName] = validator.describe();
+    });
+    console.log(JSON.stringify(describedValidators, null, 2));
   });
 }
 

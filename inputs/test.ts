@@ -10,6 +10,7 @@ export type Foo = {
 export interface IBar {
   c: string;
   d: string;
+  foo: Foo;
 }
 
 type InternalFoo = {

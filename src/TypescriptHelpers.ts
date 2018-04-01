@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import * as ts from "typescript";
 
 // XCXC this isn't guaranteed to work across typescript versions, but i probably don't
 // need it for too long anyway
@@ -321,190 +321,41 @@ export function dumpNode(node: ts.Node, indent?: number) {
 }
 
 function isExported(statement: ts.Statement) {
-  return statement.modifiers && (statement.modifiers.find(m => m.kind === ts.SyntaxKind.ExportKeyword) !== undefined);
+  return (
+    statement.modifiers &&
+    statement.modifiers.find(m => m.kind === ts.SyntaxKind.ExportKeyword) !==
+      undefined
+  );
 }
 
-export function findExports(sourceFile: ts.SourceFile, program: ts.Program): ts.Statement[] {
+export function findExports(
+  sourceFile: ts.SourceFile,
+  program: ts.Program
+): ts.Statement[] {
   return sourceFile.statements.filter(isExported);
 }
 
-// types
-const primitiveTypeFlagsToTypeOfString = new Map<ts.TypeFlags, string>();
-primitiveTypeFlagsToTypeOfString.set(ts.TypeFlags.String, "string");
-primitiveTypeFlagsToTypeOfString.set(ts.TypeFlags.Number, "number");
-primitiveTypeFlagsToTypeOfString.set(ts.TypeFlags.Boolean, "boolean");
-
-const primitiveTypeFlags = Array.from(primitiveTypeFlagsToTypeOfString.keys());
-
-function flagsMatch<T extends number>(flags: T, predicateFlag: T): boolean {
+export function flagsMatch<T extends number>(
+  flags: T,
+  predicateFlag: T
+): boolean {
   /* tslint:disable:no-bitwise */
-  return ((flags & predicateFlag) !== 0);
+  return (flags & predicateFlag) !== 0;
 }
 
-function flagsMatchOneOf<T extends number>(flags: T, predicateFlags: T[]): boolean {
-  return !!predicateFlags.find(predicateFlag => flagsMatch(flags, predicateFlag));
+export function flagsMatchOneOf<T extends number>(
+  flags: T,
+  predicateFlags: T[]
+): boolean {
+  return !!predicateFlags.find(predicateFlag =>
+    flagsMatch(flags, predicateFlag)
+  );
 }
 
-export function typeIsPrimitive(type: ts.Type): boolean {
-  return flagsMatchOneOf(type.flags, primitiveTypeFlags);
-}
+// export function typeIsPrimitive(type: ts.Type): boolean {
+//   return flagsMatchOneOf(type.flags, primitiveTypeFlags);
+// }
 
 export function typeIsObject(type: ts.Type): boolean {
   return flagsMatch(type.flags, ts.TypeFlags.Object);
-}
-
-export abstract class Validator {
-  public readonly validatorTypeName: string;
-
-  constructor(validatorTypeName: string) {
-    this.validatorTypeName = validatorTypeName;
-  }
-
-  public describe(): { [key: string]: {} } {
-    let result = { type: this.validatorTypeName };
-    const more = this.describeMore();
-    if (more) {
-      /* tslint:disable:prefer-object-spread */
-      result = Object.assign(result, more);
-    }
-    return result;
-  }
-
-  protected describeMore(): { [key: string]: {} } | undefined {
-    return undefined;
-  }
-}
-
-const undefinedValidator = new (class extends Validator {
-  constructor() {
-    super("UndefinedValidator");
-  }
-});
-
-const nullValidator = new (class extends Validator {
-  constructor() {
-    super("NullValidator");
-  }
-});
-
-class OrValidator extends Validator {
-  public readonly validators: Validator[];
-
-  constructor(validators: Validator[]) {
-    super("OrValidator");
-    this.validators = validators;
-  }
-
-  protected describeMore() {
-    return {
-      validators: this.validators.map(validator => validator.describe())
-    };
-  }
-}
-
-class ObjectValidator extends Validator {
-  private propertyValidators: Map<string, Validator>;
-
-  constructor(
-    objectName: string,
-    declarationNode: ts.Node,
-    properties: ts.Symbol[],
-    typeChecker: ts.TypeChecker
-  ) {
-    super("ObjectValidator");
-    this.propertyValidators = new Map();
-    properties.forEach(property => {
-        const propType = typeChecker.getTypeOfSymbolAtLocation(property, declarationNode);
-        // console.log(property.name);
-        this.propertyValidators.set(
-          property.name,
-          getValidatorFor(declarationNode, propType, typeChecker)
-        );
-
-        // console.log(
-        //   "property",
-        //   property.name,
-        //   property.flags,
-        //   propType.flags,
-        //   typeIsPrimitive(propType)
-        // );
-    });
-  }
-
-  public describeMore() {
-    const childDescriptions: any = {};
-    this.propertyValidators.forEach((validator, propertyName) => {
-      childDescriptions[propertyName] = validator.describe();
-    });
-    return {
-      children: childDescriptions
-    };
-  }
-}
-
-class PrimitiveValidator extends Validator {
-  public readonly typeOfString: string;
-
-  constructor(typeOfString: string) {
-    super("PrimitiveValidator");
-    this.typeOfString = typeOfString;
-  }
-
-  protected describeMore() {
-    return {
-      typeOfString: this.typeOfString
-    };
-  }
-}
-
-type ReusableValidatorEntry = {
-  predicate: (type: ts.Type) => boolean;
-  validator: Validator;
-};
-
-const reusableValidators: ReusableValidatorEntry[] = [
-  {
-    predicate: type => flagsMatch(type.flags, ts.TypeFlags.Undefined),
-    validator: undefinedValidator
-  },
-  {
-    predicate: type => flagsMatch(type.flags, ts.TypeFlags.Null),
-    validator: nullValidator
-  }
-];
-primitiveTypeFlagsToTypeOfString.forEach((typeOfString, flag) => {
-  reusableValidators.push({
-    predicate: ((type: ts.Type) => flagsMatch(type.flags, flag)),
-    validator: new PrimitiveValidator(typeOfString)
-  });
-});
-
-function getValidatorForUnion(
-  declarationNode: ts.Node,
-  types: ts.Type[],
-  typeChecker: ts.TypeChecker
-) {
-  const validators = types.map(type => getValidatorFor(declarationNode, type, typeChecker));
-  return new OrValidator(validators);
-}
-
-export function getValidatorFor(
-  declarationNode: ts.Node,
-  type: ts.Type,
-  typeChecker: ts.TypeChecker
-): Validator {
-  if (typeIsObject(type)) {
-    return new ObjectValidator("some object", declarationNode, type.getProperties(), typeChecker);
-  } else if (flagsMatch(type.flags, ts.TypeFlags.Union)) {
-    const types = (type as ts.UnionOrIntersectionType).types;
-    return getValidatorForUnion(declarationNode, types, typeChecker);
-  } else {
-    const reusableValidatorEntry = reusableValidators.find(entry => entry.predicate(type));
-    if (reusableValidatorEntry) {
-      return reusableValidatorEntry.validator;
-    } else {
-      const typeStr = typeChecker.typeToString(type);
-      throw new Error(`unable to figure out validator for: ${typeStr} (${type.flags})`);
-    }
-  }
 }
