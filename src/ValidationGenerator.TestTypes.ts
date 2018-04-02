@@ -31,3 +31,17 @@ export type SwitchedUnionFieldTestObject = (
 );
 
 export type JustANumberAlias = number;
+
+export type AnonymousNestedObjectTestObject = {
+  anObject: {
+    aNumber: number;
+  };
+}
+
+export type SelfReferencingTestObject = {
+  a: NumberFieldTestObject,
+  b: {
+    c: number
+  }
+  // anOptionalMe?: SelfReferencingTestObject;
+}

@@ -5,7 +5,8 @@ import * as Validators from "./Validators";
 function createObjectValidatorFor(
   declarationNode: ts.Node,
   properties: ts.Symbol[],
-  typeChecker: ts.TypeChecker
+  typeChecker: ts.TypeChecker,
+  path: string
 ): Validators.ObjectValidator<any> {
   const propertyValidators: {
     [propertyName: string]: Validators.Validator<any>;
@@ -18,7 +19,8 @@ function createObjectValidatorFor(
     propertyValidators[property.name] = getValidatorFor(
       declarationNode,
       propType,
-      typeChecker
+      typeChecker,
+      path + "." + property.name
     );
   });
 
@@ -55,33 +57,68 @@ addSimpleFlagBasedValidator(ts.TypeFlags.Boolean, Validators.booleanValidator);
 function getValidatorForUnion(
   declarationNode: ts.Node,
   types: ts.Type[],
-  typeChecker: ts.TypeChecker
+  typeChecker: ts.TypeChecker,
+  path: string
 ) {
-  const validators = types.map(type =>
-    getValidatorFor(declarationNode, type, typeChecker)
+  const validators = types.map((type, index) =>
+    getValidatorFor(declarationNode, type, typeChecker, `${path}|${index}`)
   );
   return new Validators.OrValidator(validators);
+}
+
+function getTypeAliasIfPossible(type: ts.Type): string | undefined {
+  if (type.symbol && type.symbol.declarations) {
+    if (type.symbol.declarations.length !== 1) {
+      throw new Error(`don't know what to do with symbols with ${type.symbol.declarations.length} declarations`);
+    }
+    const declaration = type.symbol.declarations[0];
+    const parent = declaration.parent;
+    if (parent && ts.isTypeAliasDeclaration(parent)) {
+      return ts.idText(parent.name);
+    }
+    // console.log(
+    //   "declaration",
+    //   declaration.kind,
+    //   declaration.parent.kind,
+    //   ts.isTypeParameterDeclaration(declaration)
+    // );
+    // console.log("has symbol", type.symbol.declarations);
+  }
+  return undefined;
 }
 
 function getValidatorFor(
   declarationNode: ts.Node,
   type: ts.Type,
-  typeChecker: ts.TypeChecker
+  typeChecker: ts.TypeChecker,
+  path: string,
+  isRoot?: boolean
 ): Validators.Validator<any> {
+  isRoot = !!isRoot;
+
+  // console.log("getting validator for", path);
   const reusableValidatorEntry = reusableValidators.find(entry =>
     entry.predicate(type)
   );
   if (reusableValidatorEntry) {
     return reusableValidatorEntry.validator;
   } else if (TypescriptHelpers.typeIsObject(type)) {
+    if (!isRoot) {
+      const typeAliasOrUndefined = getTypeAliasIfPossible(type);
+      if (typeAliasOrUndefined !== undefined) {
+        throw new Error("referencing other named types isn't supported yet: " + typeAliasOrUndefined);
+      }
+    }
+
     return createObjectValidatorFor(
       declarationNode,
       type.getProperties(),
-      typeChecker
+      typeChecker,
+      path
     );
   } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.Union)) {
     const types = (type as ts.UnionOrIntersectionType).types;
-    return getValidatorForUnion(declarationNode, types, typeChecker);
+    return getValidatorForUnion(declarationNode, types, typeChecker, path);
   } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.BooleanLiteral)) {
     const intrinsicName = (type as any).intrinsicName;
     if (intrinsicName === "true") {
@@ -142,21 +179,15 @@ export default class ValidationGenerator {
       if (ts.isTypeAliasDeclaration(stmt)) {
         name = ts.idText(stmt.name);
       } else {
-        // // TODO be more careful
-        // const symbol = type.aliasSymbol || type.symbol;
-        // if (symbol) {
-        //   name = symbol.name;
-        // } else {
-          throw new Error(
-            "can't determine name of: " + TypescriptHelpers.describeNode(stmt)
-          );
-        // }
+        throw new Error(
+          "can't determine name of: " + TypescriptHelpers.describeNode(stmt)
+        );
       }
 
       output.set(name, () => {
         let cachedResult = cache.get(name);
         if (!cachedResult) {
-          cachedResult = getValidatorFor(stmt, type, this.typeChecker);
+          cachedResult = getValidatorFor(stmt, type, this.typeChecker, name, /*isRoot=*/true);
           cache.set(name, cachedResult);
         }
         return cachedResult;

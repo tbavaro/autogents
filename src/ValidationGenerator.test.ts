@@ -173,3 +173,20 @@ createInputTests({
     undefined
   ]
 });
+
+createInputTests({
+  symbol: "AnonymousNestedObjectTestObject",
+  validInputs: [
+    { anObject: { aNumber: 1 } }
+  ],
+  invalidInputs: [
+    {},
+    { anObject: null },
+    { anObject: {} }
+  ]
+});
+
+// we don't support this yet because it will be infinitely deep without being smarter about it
+it("don't allow self-referencing objects", () => {
+  expect(() => getValidator("SelfReferencingTestObject")).toThrowError(/referencing other named types isn't supported yet/);
+});
