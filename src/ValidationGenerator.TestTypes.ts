@@ -15,3 +15,19 @@ export type BooleanFieldTestObject = {
 export type OptionalFieldTestObject = {
   anOptionalNumber?: number;
 };
+
+export type NullableFieldTestObject = {
+  aNullableNumber: number | null;
+};
+
+export type BooleanLiteralFieldTestObject = {
+  mustBeFalse: false;
+  optionalTrue?: true;
+};
+
+export type SwitchedUnionFieldTestObject = (
+  { isANumberNotAString: true, aNumber: number } |
+  { isANumberNotAString: false, aString: string }
+);
+
+export type JustANumberAlias = number;

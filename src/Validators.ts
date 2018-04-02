@@ -12,6 +12,7 @@ export abstract class Validator<T> {
   public abstract validate(input: any): T;
 }
 
+// TODO it's probably not good to use exceptions for "normal" cases like "or"
 export class OrValidator extends Validator<any> {
   public readonly validators: ReadonlyArray<Validator<any>>;
 

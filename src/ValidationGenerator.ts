@@ -138,17 +138,26 @@ export default class ValidationGenerator {
 
     TypescriptHelpers.findExports(sourceFile, this.program).forEach(stmt => {
       const type = this.typeChecker.getTypeAtLocation(stmt);
-      const symbol = type.aliasSymbol || type.symbol;
-      if (symbol === undefined) {
-        throw new Error(
-          "can't determine symbol of: " + TypescriptHelpers.describeNode(stmt)
-        );
+      let name: string;
+      if (ts.isTypeAliasDeclaration(stmt)) {
+        name = ts.idText(stmt.name);
+      } else {
+        // // TODO be more careful
+        // const symbol = type.aliasSymbol || type.symbol;
+        // if (symbol) {
+        //   name = symbol.name;
+        // } else {
+          throw new Error(
+            "can't determine name of: " + TypescriptHelpers.describeNode(stmt)
+          );
+        // }
       }
-      output.set(symbol.name, () => {
-        let cachedResult = cache.get(symbol.name);
+
+      output.set(name, () => {
+        let cachedResult = cache.get(name);
         if (!cachedResult) {
           cachedResult = getValidatorFor(stmt, type, this.typeChecker);
-          cache.set(symbol.name, cachedResult);
+          cache.set(name, cachedResult);
         }
         return cachedResult;
       });

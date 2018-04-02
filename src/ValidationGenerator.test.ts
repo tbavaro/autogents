@@ -19,7 +19,11 @@ afterAll(() => {
 });
 
 function getValidator<T>(symbol: string): Validator<T> {
-  const validator = (validators.get(symbol) as () => Validator<T>)();
+  const validatorGenerator = validators.get(symbol);
+  if (!validatorGenerator) {
+    throw new Error(`unable to get validator for symbol: "${symbol}"`);
+  }
+  const validator = validatorGenerator();
   expect(validator).toBeInstanceOf(Validator);
   return validator as Validator<T>;
 }
@@ -113,5 +117,59 @@ createInputTests({
   invalidInputs: [
     { anOptionalNumber: "not a number" },
     { anOptionalNumber: null }
+  ]
+});
+
+createInputTests({
+  symbol: "NullableFieldTestObject",
+  validInputs: [
+    { aNullableNumber: 1 },
+    { aNullableNumber: null }
+  ],
+  invalidInputs: [
+    { },
+    { aNullableNumber: undefined },
+    { aNullableNumber: "not a number" }
+  ]
+});
+
+createInputTests({
+  symbol: "BooleanLiteralFieldTestObject",
+  validInputs: [
+    { mustBeFalse: false },
+    { mustBeFalse: false, optionalTrue: true }
+  ],
+  invalidInputs: [
+    {},
+    { mustBeFalse: true },
+    { mustBeFalse: false, optionalTrue: false }
+  ]
+});
+
+createInputTests({
+  symbol: "SwitchedUnionFieldTestObject",
+  validInputs: [
+    { isANumberNotAString: true, aNumber: 1 },
+    { isANumberNotAString: false, aString: "hello" }
+  ],
+  invalidInputs: [
+    {},
+    { isANumberNotAString: true },
+    { isANumberNotAString: false },
+    { isANumberNotAString: false, aNumber: 1 },
+    { isANumberNotAString: true, aString: "hello" }
+  ]
+});
+
+createInputTests({
+  symbol: "JustANumberAlias",
+  validInputs: [
+    1,
+    0
+  ],
+  invalidInputs: [
+    {},
+    null,
+    undefined
   ]
 });
