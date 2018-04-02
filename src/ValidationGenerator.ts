@@ -6,9 +6,9 @@ function createObjectValidatorFor(
   declarationNode: ts.Node,
   properties: ts.Symbol[],
   typeChecker: ts.TypeChecker
-): Validators.ObjectValidator {
+): Validators.ObjectValidator<any> {
   const propertyValidators: {
-    [propertyName: string]: Validators.Validator;
+    [propertyName: string]: Validators.Validator<any>;
   } = {};
   properties.forEach(property => {
     const propType = typeChecker.getTypeOfSymbolAtLocation(
@@ -27,14 +27,14 @@ function createObjectValidatorFor(
 
 type ReusableValidatorEntry = {
   predicate: (type: ts.Type) => boolean;
-  validator: Validators.Validator;
+  validator: Validators.Validator<any>;
 };
 
 const reusableValidators: ReusableValidatorEntry[] = [];
 
 function addSimpleFlagBasedValidator(
   flag: ts.TypeFlags,
-  validator: Validators.Validator
+  validator: Validators.Validator<any>
 ) {
   reusableValidators.push({
     predicate: type => TypescriptHelpers.flagsMatch(type.flags, flag),
@@ -67,8 +67,13 @@ function getValidatorFor(
   declarationNode: ts.Node,
   type: ts.Type,
   typeChecker: ts.TypeChecker
-): Validators.Validator {
-  if (TypescriptHelpers.typeIsObject(type)) {
+): Validators.Validator<any> {
+  const reusableValidatorEntry = reusableValidators.find(entry =>
+    entry.predicate(type)
+  );
+  if (reusableValidatorEntry) {
+    return reusableValidatorEntry.validator;
+  } else if (TypescriptHelpers.typeIsObject(type)) {
     return createObjectValidatorFor(
       declarationNode,
       type.getProperties(),
@@ -77,19 +82,34 @@ function getValidatorFor(
   } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.Union)) {
     const types = (type as ts.UnionOrIntersectionType).types;
     return getValidatorForUnion(declarationNode, types, typeChecker);
+  } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.BooleanLiteral)) {
+    const intrinsicName = (type as any).intrinsicName;
+    if (intrinsicName === "true") {
+      return new Validators.ExactValueValidator(true);
+    } else if (intrinsicName === "false") {
+      return new Validators.ExactValueValidator(false);
+    }
+    throw new Error("expected boolean literal but I got this: " + JSON.stringify(typeChecker.getWidenedType(type)));
   } else {
-    const reusableValidatorEntry = reusableValidators.find(entry =>
-      entry.predicate(type)
+    const typeStr = typeChecker.typeToString(type);
+    throw new Error(
+      `unable to figure out validator for: ${typeStr} (${type.flags})`
     );
-    if (reusableValidatorEntry) {
-      return reusableValidatorEntry.validator;
+  }
+}
+
+function transformMapValues<K, V1, V2>(input: Map<K, V1>, transform: (v: V1) => V2): Map<K, V2> {
+  const output = new Map<K, V2>();
+  const entries = input.entries();
+  while (true) {
+    const entry = entries.next();
+    if (entry.done) {
+      break;
     } else {
-      const typeStr = typeChecker.typeToString(type);
-      throw new Error(
-        `unable to figure out validator for: ${typeStr} (${type.flags})`
-      );
+      output.set(entry.value[0], transform(entry.value[1]));
     }
   }
+  return output;
 }
 
 export default class ValidationGenerator {
@@ -105,19 +125,16 @@ export default class ValidationGenerator {
     this.typeChecker = this.program.getTypeChecker();
   }
 
-  public generateValidatorsFor(
+  public lazilyGenerateValidatorsFor(
     sourceFileName: string
-  ): {
-    [symbol: string]: Validators.Validator;
-  } {
+  ): Map<string, () => Validators.Validator<any>> {
     const sourceFile = this.program.getSourceFile(sourceFileName);
     if (!sourceFile) {
       throw new Error(`no source file found with name: ${sourceFileName}`);
     }
 
-    const output: {
-      [symbol: string]: Validators.Validator;
-    } = {};
+    const output: Map<string, () => Validators.Validator<any>> = new Map();
+    const cache: Map<string, Validators.Validator<any>> = new Map();
 
     TypescriptHelpers.findExports(sourceFile, this.program).forEach(stmt => {
       const type = this.typeChecker.getTypeAtLocation(stmt);
@@ -127,9 +144,25 @@ export default class ValidationGenerator {
           "can't determine symbol of: " + TypescriptHelpers.describeNode(stmt)
         );
       }
-      output[symbol.name] = getValidatorFor(stmt, type, this.typeChecker);
+      output.set(symbol.name, () => {
+        let cachedResult = cache.get(symbol.name);
+        if (!cachedResult) {
+          cachedResult = getValidatorFor(stmt, type, this.typeChecker);
+          cache.set(symbol.name, cachedResult);
+        }
+        return cachedResult;
+      });
     });
 
     return output;
+  }
+
+  public generateValidatorsFor(
+    sourceFileName: string
+  ): Map<string, Validators.Validator<any>> {
+    return transformMapValues(
+      this.lazilyGenerateValidatorsFor(sourceFileName),
+      func => func()
+    );
   }
 }

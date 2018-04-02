@@ -11,15 +11,18 @@ function mapPOJO<V1, V2>(
   return output;
 }
 
-type ValidatorHelperEntry<T> = {
-  validatorOrType: Validators.Validator | (typeof Validators.Validator);
+type ValidatorHelperEntry<T extends Validators.Validator<any>> = {
+  validatorOrType: T | (typeof Validators.Validator);
   describeAsPOJO: (validator: T) => {};
-}
+};
 
-function makeValidatorHelper<T extends Validators.Validator, U /*extends typeof T */>(
+function makeValidatorHelper<
+  T extends Validators.Validator<any>,
+  U /*extends typeof T */
+>(
   validatorOrType: T | U,
   describeAsPOJO: (validator: T) => {}
- ): ValidatorHelperEntry<T> {
+): ValidatorHelperEntry<any> {
   return {
     validatorOrType: validatorOrType,
     describeAsPOJO: describeAsPOJO
@@ -27,26 +30,21 @@ function makeValidatorHelper<T extends Validators.Validator, U /*extends typeof 
 }
 
 const validatorHelpers: Array<ValidatorHelperEntry<any>> = [
-  makeValidatorHelper(
-    Validators.undefinedValidator,
-    () => ({ type: "UndefinedValidator" })
-  ),
-  makeValidatorHelper(
-    Validators.nullValidator,
-    () => ({ type: "NullValidator" })
-  ),
-  makeValidatorHelper(
-    Validators.stringValidator,
-    () => ({ type: "StringValidator" })
-  ),
-  makeValidatorHelper(
-    Validators.numberValidator,
-    () => ({ type: "NumberValidator" })
-  ),
-  makeValidatorHelper(
-    Validators.booleanValidator,
-    () => ({ type: "BooleanValidator" })
-  ),
+  makeValidatorHelper(Validators.undefinedValidator, () => ({
+    type: "UndefinedValidator"
+  })),
+  makeValidatorHelper(Validators.nullValidator, () => ({
+    type: "NullValidator"
+  })),
+  makeValidatorHelper(Validators.stringValidator, () => ({
+    type: "StringValidator"
+  })),
+  makeValidatorHelper(Validators.numberValidator, () => ({
+    type: "NumberValidator"
+  })),
+  makeValidatorHelper(Validators.booleanValidator, () => ({
+    type: "BooleanValidator"
+  })),
   makeValidatorHelper(
     Validators.OrValidator,
     (validator: Validators.OrValidator) => ({
@@ -56,20 +54,24 @@ const validatorHelpers: Array<ValidatorHelperEntry<any>> = [
   ),
   makeValidatorHelper(
     Validators.ObjectValidator,
-    (validator: Validators.ObjectValidator) => ({
+    (validator: Validators.ObjectValidator<any>) => ({
       type: "ObjectValidator",
-      properties: mapPOJO(validator.propertyValidators, v => describeValidatorAsPOJO(v))
+      properties: mapPOJO(validator.propertyValidators, v =>
+        describeValidatorAsPOJO(v)
+      )
     })
   )
 ];
 
-function findHelperForValidator<T extends Validators.Validator>(validator: T): ValidatorHelperEntry<T> {
+function findHelperForValidator<T extends Validators.Validator<any>>(
+  validator: T
+): ValidatorHelperEntry<T> {
   const matches = validatorHelpers.filter(helper => {
     const validatorOrType = helper.validatorOrType;
     if (validatorOrType instanceof Validators.Validator) {
       return validatorOrType === validator;
     } else {
-      return (validator instanceof (helper.validatorOrType as any));
+      return validator instanceof (helper.validatorOrType as any);
     }
   });
   if (matches.length === 0) {
@@ -81,6 +83,8 @@ function findHelperForValidator<T extends Validators.Validator>(validator: T): V
   }
 }
 
-export function describeValidatorAsPOJO(validator: Validators.Validator): {} {
+export function describeValidatorAsPOJO(
+  validator: Validators.Validator<any>
+): {} {
   return findHelperForValidator(validator).describeAsPOJO(validator);
 }
