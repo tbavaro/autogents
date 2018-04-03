@@ -74,7 +74,8 @@ function getTypeAliasIfPossible(type: ts.Type): string | undefined {
     const declaration = type.symbol.declarations[0];
     const parent = declaration.parent;
     if (parent && ts.isTypeAliasDeclaration(parent)) {
-      return ts.idText(parent.name);
+      return getUniqueIdentifierForTypeDeclaredAtNode(parent);
+      // return ts.idText(parent.name);
     }
     // console.log(
     //   "declaration",
@@ -147,6 +148,27 @@ function transformMapValues<K, V1, V2>(input: Map<K, V1>, transform: (v: V1) => 
     }
   }
   return output;
+}
+
+function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
+  if (ts.isTypeAliasDeclaration(node)) {
+    const name = ts.idText(node.name);
+    console.log("unique id", name);
+    let fullName = name;
+    let curNode: ts.Node | undefined = node;
+    while (curNode.parent) {
+      curNode = curNode.parent;
+      if (ts.isSourceFile(curNode)) {
+        fullName = curNode.fileName + ":" + curNode.moduleName + ":" + fullName;
+      } else {
+        throw new Error("xcxc");
+      }
+      // console.log(curNode);
+    }
+    return fullName;
+  } else {
+    throw new Error("xcxc");
+  }
 }
 
 export default class ValidationGenerator {

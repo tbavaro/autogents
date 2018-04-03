@@ -6,9 +6,10 @@
   "rules": {
     "interface-over-type-literal": false,
     "max-classes-per-file": false,
+    "member-ordering": false,
     "no-console": false,
+    "no-unused-expression": true,
     "object-literal-shorthand": false,
-    "object-literal-sort-keys": false,
-    "no-unused-expression": true
+    "object-literal-sort-keys": false
   }
 }

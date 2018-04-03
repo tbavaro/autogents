@@ -1,40 +1,26 @@
 import * as ts from "typescript";
 import * as Test from "../inputs/test";
 import * as TypescriptHelpers from "./TypescriptHelpers";
+import * as Utils from "./Utils";
 import ValidationGenerator from "./ValidationGenerator";
-import * as ValidatorHelpers from "./ValidatorHelpers";
-import { ObjectValidator } from "./Validators";
+import { Validator } from "./Validators";
 
 function run() {
-  const rootName = "inputs/test.ts";
+  const rootName = "src/ValidationGenerator.TestTypes.ts";
 
   const generator = new ValidationGenerator([rootName]);
 
   console.log(`============ ${rootName}`);
-  const validators = generator.generateValidatorsFor(rootName);
-  const describedValidators: { [propertyName: string]: {} } = {};
-  Object.entries(validators).forEach(([propertyName, validator]) => {
-    describedValidators[
-      propertyName
-    ] = ValidatorHelpers.describeValidatorAsPOJO(validator);
+  const allLazyValidators = generator.lazilyGenerateValidatorsFor(rootName);
+  const validators = new Map<string, Validator<any>>();
+  [
+    "NumberFieldTestObject"
+  ].forEach(key => {
+    validators.set(key, (allLazyValidators.get(key) as any)());
   });
-  console.log(JSON.stringify(describedValidators, null, 2));
 
-  /* tslint:disable */
-  const fooValidator = validators["Foo"] as
-    | ObjectValidator<Test.Foo>
-    | undefined;
-  /* tslint:enable */
-
-  if (fooValidator === undefined) {
-    throw new Error("no foo validator");
-  }
-
-  fooValidator.validate({
-    aString: "hey",
-    aStringOrNull: null,
-    aNumber: 123
-  });
+  const describedValidators = Utils.transformMapValues(validators, v => v.describe());
+  console.log(JSON.stringify(Utils.mapToPOJO(describedValidators), null, 2));
 }
 
 run();

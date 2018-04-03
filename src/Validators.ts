@@ -1,3 +1,5 @@
+import * as Utils from "./Utils";
+
 export class ValidationError extends Error {
   public readonly cause?: ValidationError;
 
@@ -10,6 +12,12 @@ export class ValidationError extends Error {
 export abstract class Validator<T> {
   // throws ValidationError if validation fails
   public abstract validate(input: any): T;
+
+  public abstract describe(): {};
+
+  protected static describeHelper(kind: string, otherProperties?: {}): {} {
+    return { kind: kind, ...otherProperties };
+  }
 }
 
 // TODO it's probably not good to use exceptions for "normal" cases like "or"
@@ -42,6 +50,12 @@ export class OrValidator extends Validator<any> {
     }
 
     return input;
+  }
+
+  public describe() {
+    return Validator.describeHelper("OrValidator", {
+      validators: this.validators.map(v => v.describe())
+    });
   }
 }
 
@@ -81,6 +95,16 @@ export class ObjectValidator<T> extends Validator<T> {
 
     return input as T;
   }
+
+  public describe() {
+    return Validator.describeHelper("ObjectValidator", {
+      propertyValidators:
+        Utils.transformPOJOValues(
+          this.propertyValidators,
+          (validator) => validator.describe()
+        )
+    });
+  }
 }
 
 export class TypeOfValidator<T> extends Validator<T> {
@@ -97,6 +121,12 @@ export class TypeOfValidator<T> extends Validator<T> {
     }
     return input as T;
   }
+
+  public describe() {
+    return Validator.describeHelper("TypeOfValidator", {
+      typeOfString: this.typeOfString
+    });
+  }
 }
 
 export class ExactValueValidator<T> extends Validator<T> {
@@ -112,6 +142,73 @@ export class ExactValueValidator<T> extends Validator<T> {
       throw new ValidationError("ExactValueValidator failed");
     }
     return input as T;
+  }
+
+  public describe() {
+    return Validator.describeHelper("ExactValueValidator", {
+      value: this.value
+    });
+  }
+}
+
+export class PassThroughValidator<T> extends Validator<T> {
+  private privateDelegate?: Validator<T>;
+
+  public readonly key: string;
+
+  set delegate(validator: Validator<T>) {
+    if (this.privateDelegate !== undefined) {
+      throw new Error("delegate can't be set twice");
+    } else {
+      this.privateDelegate = validator;
+    }
+  }
+
+  get delegate(): Validator<T> {
+    if (this.privateDelegate === undefined) {
+      throw new Error("delegate is not set");
+    } else {
+      return this.privateDelegate;
+    }
+  }
+
+  constructor(key: string) {
+    super();
+    this.key = key;
+  }
+
+  public validate(input: any): T {
+    return this.delegate.validate(input);
+  }
+
+  public describe() {
+    return Validator.describeHelper("PassThroughValidator", {
+      key: this.key,
+      delegateIsSet: (this.privateDelegate !== undefined)
+    });
+  }
+}
+
+export class PassThroughValidatorFactory {
+  private keyToPTVMap: Map<string, PassThroughValidator<any>> = new Map();
+
+  public getOrCreatePTV(key: string): PassThroughValidator<any> {
+    let validator = this.keyToPTVMap.get(key);
+    if (validator === undefined) {
+      validator = new PassThroughValidator<any>(key);
+      this.keyToPTVMap.set(key, validator);
+    }
+    return validator;
+  }
+
+  public resolve(keyToValidatorMap: Map<string, Validator<any>>) {
+    this.keyToPTVMap.forEach((ptv, key) => {
+      const validator = keyToValidatorMap.get(key);
+      if (!validator) {
+        throw new Error("no validator found for key: " + key);
+      }
+      ptv.delegate = validator;
+    });
   }
 }
 
