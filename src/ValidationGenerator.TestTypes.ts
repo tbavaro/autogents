@@ -42,3 +42,13 @@ export type SelfReferencingTestObject = {
   aNumber: number;
   anOptionalMe?: SelfReferencingTestObject;
 }
+
+export type CycleTestObject1 = {
+  aNumber: number;
+  anOptional2?: CycleTestObject2;
+}
+
+export type CycleTestObject2 = {
+  aString: string;
+  anOptional1?: CycleTestObject1;
+}

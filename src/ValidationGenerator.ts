@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 import * as TypescriptHelpers from "./TypescriptHelpers";
+// import * as Utils from "./Utils";
 import * as Validators from "./Validators";
 import { Validator } from "./Validators";
 
@@ -188,6 +189,82 @@ function assertDefined<T>(value: T | undefined): T {
   return value;
 }
 
+function s(value: any): string {
+  return JSON.stringify(value);
+}
+
+function addToLastLine(outputRows: string[], str: string) {
+  outputRows[outputRows.length - 1] += str;
+}
+
+function removeFromLastLine(outputRows: string[], str: string) {
+  if (outputRows[outputRows.length - 1].endsWith(str)) {
+    outputRows[outputRows.length - 1] = outputRows[outputRows.length - 1].slice(0, outputRows[outputRows.length - 1].length - str.length);
+  } else {
+    throw new Error(`expected line to end with "${str}" but it didn't`);
+  }
+}
+
+function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
+  const rowIndex = outputRows.length - 1;
+  const oldRow = outputRows[rowIndex];
+  outputRows.splice(rowIndex, 1);
+  func();
+  outputRows[rowIndex] = oldRow + outputRows[rowIndex].trimLeft();
+}
+
+function serializeValidator(outputRows: string[], validator: Validator<any>, indent?: number) {
+  const addComma = () => addToLastLine(outputRows, ",");
+  const removeComma = () => removeFromLastLine(outputRows, ",");
+
+  indent = indent || 0;
+  const prefix = "  ".repeat(indent);
+  const nextPrefix = prefix + "  ";
+
+  if (validator === Validators.numberValidator) {
+    outputRows.push(prefix + "Validators.numberValidator");
+  } else if (validator === Validators.stringValidator) {
+    outputRows.push(prefix + "Validators.stringValidator");
+  } else if (validator === Validators.booleanValidator) {
+    outputRows.push(prefix + "Validators.booleanValidator");
+  } else if (validator === Validators.nullValidator) {
+    outputRows.push(prefix + "Validators.nullValidator");
+  } else if (validator === Validators.undefinedValidator) {
+    outputRows.push(prefix + "Validators.undefinedValidator");
+  } else if (validator instanceof Validators.ObjectValidator) {
+    outputRows.push(prefix + "new ObjectValidator({");
+    if (Object.keys(validator.propertyValidators).length > 0) {
+      for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
+        outputRows.push(nextPrefix + `${s(pName)}: `);
+        pullNextThingOntoThisLine(outputRows, () => {
+          serializeValidator(outputRows, pValidator, (indent || 0) + 1);
+        });
+        addComma();
+      }
+      removeComma();
+    }
+    outputRows.push(prefix + "})");
+  } else if (validator instanceof Validators.OrValidator) {
+    outputRows.push(prefix + "new OrValidator([");
+    if (validator.validators.length > 0) {
+      for (const subValidator of validator.validators) {
+        serializeValidator(outputRows, subValidator, indent + 1);
+        addComma();
+      }
+      removeComma();
+    }
+    outputRows.push(prefix + "])");
+  } else if (validator instanceof Validators.TypeOfValidator) {
+    outputRows.push(prefix + `new TypeOfValidator(${s(validator.typeOfString)})`);
+  } else if (validator instanceof Validators.ExactValueValidator) {
+    outputRows.push(prefix + `new ExactValueValidator(${s(validator.value)})`);
+  } else if (validator instanceof Validators.PassThroughValidator) {
+    outputRows.push(prefix + `new PassThroughValidator(${s(validator.key)})`);
+  } else {
+    outputRows.push(prefix + "/* something else */");
+  }
+}
+
 export default class ValidationGenerator {
   private readonly program: ts.Program;
   private readonly typeChecker: ts.TypeChecker;
@@ -279,5 +356,26 @@ export default class ValidationGenerator {
       throw new Error(`source file "${sourceFileName}" has no symbol "${symbolName}"`);
     }
     return assertDefined(this.validatorMap.get(uniqueId))();
+  }
+
+  public serializeValidators(): string {
+    const lines: string[] = [];
+
+    for (const [sourceFileName, innerMap] of this.idMap.entries()) {
+      lines.push(`/*** BEGIN "${sourceFileName}"`);
+
+      for (const [symbolName, uniqueId] of innerMap) {
+        const validator = assertDefined(this.validatorMap.get(uniqueId))();
+        lines.push(`export const validate${symbolName} = `);
+        pullNextThingOntoThisLine(lines, () => {
+          serializeValidator(lines, validator, 0);
+        });
+        addToLastLine(lines, ";");
+      }
+
+      lines.push(`/*** END "${sourceFileName}"`);
+    }
+
+    return lines.join("\n");
   }
 }

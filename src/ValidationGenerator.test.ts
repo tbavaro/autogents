@@ -190,3 +190,17 @@ createInputTests({
     { aNumber: 1, anOptionalMe: { aNumber: 2, anOptionalMe: {} } }
   ]
 });
+
+createInputTests({
+  symbol: "CycleTestObject1",
+  validInputs: [
+    { aNumber: 1 },
+    { aNumber: 1, anOptional2: { aString: "foo" } },
+    { aNumber: 1, anOptional2: { aString: "foo", anOptional1: { aNumber: 3 } } },
+    { aNumber: 1, anOptional2: { aString: "foo", anOptional1: { aNumber: 3, anOptional2: { aString: "bar" } } } }
+  ],
+  invalidInputs: [
+    {},
+    { aNumber: 1, anOptional2: { aNumber: 2 } }
+  ]
+})

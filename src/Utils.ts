@@ -29,3 +29,9 @@ export function mapToPOJO<V>(
   }
   return output;
 }
+
+export function pushAll<V>(array: V[], values: Iterable<V>) {
+  for (const v of values) {
+    array.push(v);
+  }
+}
