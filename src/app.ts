@@ -11,12 +11,11 @@ function run() {
   const generator = new ValidationGenerator([rootName]);
 
   console.log(`============ ${rootName}`);
-  const allLazyValidators = generator.lazilyGenerateValidatorsFor(rootName);
   const validators = new Map<string, Validator<any>>();
   [
-    "NumberFieldTestObject"
+    "SelfReferencingTestObject"
   ].forEach(key => {
-    validators.set(key, (allLazyValidators.get(key) as any)());
+    validators.set(key, generator.getValidator(rootName, key));
   });
 
   const describedValidators = Utils.transformMapValues(validators, v => v.describe());

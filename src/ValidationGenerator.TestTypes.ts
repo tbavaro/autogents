@@ -39,9 +39,6 @@ export type AnonymousNestedObjectTestObject = {
 }
 
 export type SelfReferencingTestObject = {
-  a: NumberFieldTestObject,
-  b: {
-    c: number
-  }
-  // anOptionalMe?: SelfReferencingTestObject;
+  aNumber: number;
+  anOptionalMe?: SelfReferencingTestObject;
 }

@@ -157,7 +157,7 @@ export class PassThroughValidator<T> extends Validator<T> {
   public readonly key: string;
 
   set delegate(validator: Validator<T>) {
-    if (this.privateDelegate !== undefined) {
+    if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
       throw new Error("delegate can't be set twice");
     } else {
       this.privateDelegate = validator;
@@ -190,25 +190,26 @@ export class PassThroughValidator<T> extends Validator<T> {
 }
 
 export class PassThroughValidatorFactory {
-  private keyToPTVMap: Map<string, PassThroughValidator<any>> = new Map();
+  private unresolvedKeyToPTVMap: Map<string, PassThroughValidator<any>> = new Map();
 
   public getOrCreatePTV(key: string): PassThroughValidator<any> {
-    let validator = this.keyToPTVMap.get(key);
+    let validator = this.unresolvedKeyToPTVMap.get(key);
     if (validator === undefined) {
       validator = new PassThroughValidator<any>(key);
-      this.keyToPTVMap.set(key, validator);
+      this.unresolvedKeyToPTVMap.set(key, validator);
     }
     return validator;
   }
 
-  public resolve(keyToValidatorMap: Map<string, Validator<any>>) {
-    this.keyToPTVMap.forEach((ptv, key) => {
+  public resolve(keyToValidatorMap: Map<string, () => Validator<any>>) {
+    this.unresolvedKeyToPTVMap.forEach((ptv, key) => {
       const validator = keyToValidatorMap.get(key);
       if (!validator) {
         throw new Error("no validator found for key: " + key);
       }
-      ptv.delegate = validator;
+      ptv.delegate = validator();
     });
+    this.unresolvedKeyToPTVMap.clear();
   }
 }
 

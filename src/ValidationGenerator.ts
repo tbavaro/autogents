@@ -1,15 +1,21 @@
 import * as ts from "typescript";
 import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Validators from "./Validators";
+import { Validator } from "./Validators";
+
+type Context = {
+  ptvFactory: Validators.PassThroughValidatorFactory;
+};
 
 function createObjectValidatorFor(
   declarationNode: ts.Node,
   properties: ts.Symbol[],
   typeChecker: ts.TypeChecker,
-  path: string
+  path: string,
+  context: Context
 ): Validators.ObjectValidator<any> {
   const propertyValidators: {
-    [propertyName: string]: Validators.Validator<any>;
+    [propertyName: string]: Validator<any>;
   } = {};
   properties.forEach(property => {
     const propType = typeChecker.getTypeOfSymbolAtLocation(
@@ -20,7 +26,8 @@ function createObjectValidatorFor(
       declarationNode,
       propType,
       typeChecker,
-      path + "." + property.name
+      path + "." + property.name,
+      context
     );
   });
 
@@ -29,14 +36,14 @@ function createObjectValidatorFor(
 
 type ReusableValidatorEntry = {
   predicate: (type: ts.Type) => boolean;
-  validator: Validators.Validator<any>;
+  validator: Validator<any>;
 };
 
 const reusableValidators: ReusableValidatorEntry[] = [];
 
 function addSimpleFlagBasedValidator(
   flag: ts.TypeFlags,
-  validator: Validators.Validator<any>
+  validator: Validator<any>
 ) {
   reusableValidators.push({
     predicate: type => TypescriptHelpers.flagsMatch(type.flags, flag),
@@ -58,10 +65,11 @@ function getValidatorForUnion(
   declarationNode: ts.Node,
   types: ts.Type[],
   typeChecker: ts.TypeChecker,
-  path: string
+  path: string,
+  context: Context
 ) {
   const validators = types.map((type, index) =>
-    getValidatorFor(declarationNode, type, typeChecker, `${path}|${index}`)
+    getValidatorFor(declarationNode, type, typeChecker, `${path}|${index}`, context)
   );
   return new Validators.OrValidator(validators);
 }
@@ -93,9 +101,17 @@ function getValidatorFor(
   type: ts.Type,
   typeChecker: ts.TypeChecker,
   path: string,
+  context: Context,
   isRoot?: boolean
-): Validators.Validator<any> {
+): Validator<any> {
   isRoot = !!isRoot;
+
+  if (!isRoot) {
+    const typeAliasOrUndefined = getTypeAliasIfPossible(type);
+    if (typeAliasOrUndefined !== undefined) {
+      return context.ptvFactory.getOrCreatePTV(typeAliasOrUndefined);
+    }
+  }
 
   // console.log("getting validator for", path);
   const reusableValidatorEntry = reusableValidators.find(entry =>
@@ -104,22 +120,16 @@ function getValidatorFor(
   if (reusableValidatorEntry) {
     return reusableValidatorEntry.validator;
   } else if (TypescriptHelpers.typeIsObject(type)) {
-    if (!isRoot) {
-      const typeAliasOrUndefined = getTypeAliasIfPossible(type);
-      if (typeAliasOrUndefined !== undefined) {
-        throw new Error("referencing other named types isn't supported yet: " + typeAliasOrUndefined);
-      }
-    }
-
     return createObjectValidatorFor(
       declarationNode,
       type.getProperties(),
       typeChecker,
-      path
+      path,
+      context
     );
   } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.Union)) {
     const types = (type as ts.UnionOrIntersectionType).types;
-    return getValidatorForUnion(declarationNode, types, typeChecker, path);
+    return getValidatorForUnion(declarationNode, types, typeChecker, path, context);
   } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.BooleanLiteral)) {
     const intrinsicName = (type as any).intrinsicName;
     if (intrinsicName === "true") {
@@ -153,13 +163,13 @@ function transformMapValues<K, V1, V2>(input: Map<K, V1>, transform: (v: V1) => 
 function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
   if (ts.isTypeAliasDeclaration(node)) {
     const name = ts.idText(node.name);
-    console.log("unique id", name);
+    // console.log("unique id", name);
     let fullName = name;
     let curNode: ts.Node | undefined = node;
     while (curNode.parent) {
       curNode = curNode.parent;
       if (ts.isSourceFile(curNode)) {
-        fullName = curNode.fileName + ":" + curNode.moduleName + ":" + fullName;
+        fullName = curNode.fileName + ":" + fullName;
       } else {
         throw new Error("xcxc");
       }
@@ -171,9 +181,23 @@ function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
   }
 }
 
+function assertDefined<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error("unexpected undefined");
+  }
+  return value;
+}
+
 export default class ValidationGenerator {
   private readonly program: ts.Program;
   private readonly typeChecker: ts.TypeChecker;
+  private readonly ptvFactory: Validators.PassThroughValidatorFactory;
+
+  // sourceFileName -> symbolName -> unique id
+  private readonly idMap: Map<string, Map<string, string>>;
+
+  // unique id -> () -> Validator
+  private readonly validatorMap: Map<string, () => Validator<any>>;
 
   constructor(sourceFileNames: string[]) {
     const options: ts.CompilerOptions = {
@@ -182,18 +206,30 @@ export default class ValidationGenerator {
 
     this.program = ts.createProgram(sourceFileNames, options);
     this.typeChecker = this.program.getTypeChecker();
+    this.ptvFactory = new Validators.PassThroughValidatorFactory();
+    this.idMap = new Map();
+    this.validatorMap = new Map();
+
+    sourceFileNames.forEach(f => this.lazilyGenerateValidatorsFor(f));
   }
 
-  public lazilyGenerateValidatorsFor(
-    sourceFileName: string
-  ): Map<string, () => Validators.Validator<any>> {
+  private lazilyGenerateValidatorsFor(sourceFileName: string) {
     const sourceFile = this.program.getSourceFile(sourceFileName);
     if (!sourceFile) {
       throw new Error(`no source file found with name: ${sourceFileName}`);
     }
 
-    const output: Map<string, () => Validators.Validator<any>> = new Map();
-    const cache: Map<string, Validators.Validator<any>> = new Map();
+    const output: Map<string, () => Validator<any>> = new Map();
+
+    // xcxc maybe i don't need this and it can just be part of the closure below?
+    const cache: Map<string, Validator<any>> = new Map();
+
+    const context: Context = {
+      ptvFactory: this.ptvFactory
+    };
+
+    const symbolNamesToUniqueIdsMap = new Map<string, string>();
+    this.idMap.set(sourceFileName, symbolNamesToUniqueIdsMap);
 
     TypescriptHelpers.findExports(sourceFile, this.program).forEach(stmt => {
       const type = this.typeChecker.getTypeAtLocation(stmt);
@@ -206,25 +242,42 @@ export default class ValidationGenerator {
         );
       }
 
-      output.set(name, () => {
-        let cachedResult = cache.get(name);
-        if (!cachedResult) {
-          cachedResult = getValidatorFor(stmt, type, this.typeChecker, name, /*isRoot=*/true);
-          cache.set(name, cachedResult);
-        }
-        return cachedResult;
+      const uniqueId = getUniqueIdentifierForTypeDeclaredAtNode(stmt);
+      symbolNamesToUniqueIdsMap.set(name, uniqueId);
+
+      this.validatorMap.set(uniqueId, () => {
+        const validator = getValidatorFor(stmt, type, this.typeChecker, name, context, /*isRoot=*/true);
+        // subsequent calls should just return this one;
+        // set it first so we don't infinite loop if there's a cycle
+        this.validatorMap.set(uniqueId, () => validator);
+        this.ptvFactory.resolve(this.validatorMap);
+        return validator;
       });
     });
-
-    return output;
   }
 
   public generateValidatorsFor(
     sourceFileName: string
-  ): Map<string, Validators.Validator<any>> {
+  ): Map<string, Validator<any>> {
+    const submap = this.idMap.get(sourceFileName);
+    if (submap === undefined) {
+      throw new Error("no entries for source file: " + sourceFileName);
+    }
     return transformMapValues(
-      this.lazilyGenerateValidatorsFor(sourceFileName),
-      func => func()
+      submap,
+      uniqueId => assertDefined(this.validatorMap.get(uniqueId))()
     );
+  }
+
+  public getValidator(sourceFileName: string, symbolName: string): Validator<any> {
+    const submap = this.idMap.get(sourceFileName);
+    if (submap === undefined) {
+      throw new Error("no entries for source file: " + sourceFileName);
+    }
+    const uniqueId = submap.get(symbolName);
+    if (uniqueId === undefined) {
+      throw new Error(`source file "${sourceFileName}" has no symbol "${symbolName}"`);
+    }
+    return assertDefined(this.validatorMap.get(uniqueId))();
   }
 }

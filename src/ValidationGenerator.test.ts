@@ -5,27 +5,18 @@ import ValidationGenerator from "./ValidationGenerator";
 import { ValidationError, Validator } from "./Validators";
 
 let generator: ValidationGenerator;
-let validators: Map<string, () => Validator<any>>;
+const sourceFileName = "src/ValidationGenerator.TestTypes.ts";
 
 beforeAll(() => {
-  const sourceFileName = "src/ValidationGenerator.TestTypes.ts";
   generator = new ValidationGenerator([sourceFileName]);
-  validators = generator.lazilyGenerateValidatorsFor(sourceFileName);
 });
 
 afterAll(() => {
   generator = null as any;
-  validators = null as any;
 });
 
 function getValidator<T>(symbol: string): Validator<T> {
-  const validatorGenerator = validators.get(symbol);
-  if (!validatorGenerator) {
-    throw new Error(`unable to get validator for symbol: "${symbol}"`);
-  }
-  const validator = validatorGenerator();
-  expect(validator).toBeInstanceOf(Validator);
-  return validator as Validator<T>;
+  return generator.getValidator(sourceFileName, symbol) as Validator<T>;
 }
 
 function createInputTests(attrs: {
@@ -186,7 +177,16 @@ createInputTests({
   ]
 });
 
-// we don't support this yet because it will be infinitely deep without being smarter about it
-it("don't allow self-referencing objects", () => {
-  expect(() => getValidator("SelfReferencingTestObject")).toThrowError(/referencing other named types isn't supported yet/);
+createInputTests({
+  symbol: "SelfReferencingTestObject",
+  validInputs: [
+    { aNumber: 1 },
+    { aNumber: 1, anOptionalMe: { aNumber: 2 } },
+    { aNumber: 1, anOptionalMe: { aNumber: 2, anOptionalMe: { aNumber: 3 } } }
+  ],
+  invalidInputs: [
+    {},
+    { aNumber: 1, anOptionalMe: {} },
+    { aNumber: 1, anOptionalMe: { aNumber: 2, anOptionalMe: {} } }
+  ]
 });
