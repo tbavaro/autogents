@@ -1,11 +1,73 @@
 import * as ts from "typescript";
 import * as TypescriptHelpers from "./TypescriptHelpers";
-// import * as Utils from "./Utils";
 import * as Validators from "./Validators";
 import { Validator } from "./Validators";
 
+// these get replaced by stub references in the generated output
+class StubValidator<T> extends Validator<T> {
+  private privateDelegate?: Validator<T>;
+
+  public readonly key: string;
+
+  set delegate(validator: Validator<T>) {
+    if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
+      throw new Error("delegate can't be set twice");
+    } else {
+      this.privateDelegate = validator;
+    }
+  }
+
+  get delegate(): Validator<T> {
+    if (this.privateDelegate === undefined) {
+      throw new Error("delegate is not set");
+    } else {
+      return this.privateDelegate;
+    }
+  }
+
+  constructor(key: string) {
+    super();
+    this.key = key;
+  }
+
+  public validate(input: any): T {
+    return this.delegate.validate(input);
+  }
+
+  public describe() {
+    return Validator.describeHelper("PassThroughValidator", {
+      key: this.key,
+      delegateIsSet: (this.privateDelegate !== undefined)
+    });
+  }
+}
+
+class StubValidatorFactory {
+  private unresolvedKeyToPTVMap: Map<string, StubValidator<any>> = new Map();
+
+  public getOrCreatePTV(key: string): StubValidator<any> {
+    let validator = this.unresolvedKeyToPTVMap.get(key);
+    if (validator === undefined) {
+      validator = new StubValidator<any>(key);
+      this.unresolvedKeyToPTVMap.set(key, validator);
+    }
+    return validator;
+  }
+
+  public resolve(keyToValidatorMap: Map<string, () => Validator<any>>) {
+    this.unresolvedKeyToPTVMap.forEach((ptv, key) => {
+      const validator = keyToValidatorMap.get(key);
+      if (!validator) {
+        throw new Error("no validator found for key: " + key);
+      }
+      ptv.delegate = validator();
+    });
+    this.unresolvedKeyToPTVMap.clear();
+  }
+}
+
 type Context = {
-  ptvFactory: Validators.PassThroughValidatorFactory;
+  ptvFactory: StubValidatorFactory;
 };
 
 function createObjectValidatorFor(
@@ -213,7 +275,11 @@ function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
   outputRows[rowIndex] = oldRow + outputRows[rowIndex].trimLeft();
 }
 
-function serializeValidator(outputRows: string[], validator: Validator<any>, indent?: number) {
+function serializeValidator(
+  outputRows: string[],
+  validator: Validator<any>,
+  uniqueIdToVariableNameMap: Map<string, string>,
+  indent?: number) {
   const addComma = () => addToLastLine(outputRows, ",");
   const removeComma = () => removeFromLastLine(outputRows, ",");
 
@@ -237,7 +303,7 @@ function serializeValidator(outputRows: string[], validator: Validator<any>, ind
       for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
         outputRows.push(nextPrefix + `${s(pName)}: `);
         pullNextThingOntoThisLine(outputRows, () => {
-          serializeValidator(outputRows, pValidator, (indent || 0) + 1);
+          serializeValidator(outputRows, pValidator, uniqueIdToVariableNameMap, (indent || 0) + 1);
         });
         addComma();
       }
@@ -248,7 +314,7 @@ function serializeValidator(outputRows: string[], validator: Validator<any>, ind
     outputRows.push(prefix + "new OrValidator([");
     if (validator.validators.length > 0) {
       for (const subValidator of validator.validators) {
-        serializeValidator(outputRows, subValidator, indent + 1);
+        serializeValidator(outputRows, subValidator, uniqueIdToVariableNameMap, indent + 1);
         addComma();
       }
       removeComma();
@@ -258,8 +324,9 @@ function serializeValidator(outputRows: string[], validator: Validator<any>, ind
     outputRows.push(prefix + `new TypeOfValidator(${s(validator.typeOfString)})`);
   } else if (validator instanceof Validators.ExactValueValidator) {
     outputRows.push(prefix + `new ExactValueValidator(${s(validator.value)})`);
-  } else if (validator instanceof Validators.PassThroughValidator) {
-    outputRows.push(prefix + `new PassThroughValidator(${s(validator.key)})`);
+  } else if (validator instanceof StubValidator) {
+    const variableName = assertDefined(uniqueIdToVariableNameMap.get(validator.key));
+    outputRows.push(prefix + `stubs.${variableName}`);
   } else {
     outputRows.push(prefix + "/* something else */");
   }
@@ -268,7 +335,7 @@ function serializeValidator(outputRows: string[], validator: Validator<any>, ind
 export default class ValidationGenerator {
   private readonly program: ts.Program;
   private readonly typeChecker: ts.TypeChecker;
-  private readonly ptvFactory: Validators.PassThroughValidatorFactory;
+  private readonly ptvFactory: StubValidatorFactory;
 
   // sourceFileName -> symbolName -> unique id
   private readonly idMap: Map<string, Map<string, string>>;
@@ -283,7 +350,7 @@ export default class ValidationGenerator {
 
     this.program = ts.createProgram(sourceFileNames, options);
     this.typeChecker = this.program.getTypeChecker();
-    this.ptvFactory = new Validators.PassThroughValidatorFactory();
+    this.ptvFactory = new StubValidatorFactory();
     this.idMap = new Map();
     this.validatorMap = new Map();
 
@@ -358,22 +425,61 @@ export default class ValidationGenerator {
     return assertDefined(this.validatorMap.get(uniqueId))();
   }
 
+  private forEachUniqueId(func: (uniqueId: string, symbolName: string, sourceFileName: string) => void) {
+    for (const [sourceFileName, innerMap] of this.idMap.entries()) {
+      for (const [symbolName, uniqueId] of innerMap) {
+        func(uniqueId, symbolName, sourceFileName);
+      }
+    }
+  }
+
+  // returns uniqueId => variable name
+  private generateValidatorVariableNames(): Map<string, string> {
+    const usedVariableNames = new Set<string>();
+    const output = new Map<string, string>();
+
+    this.forEachUniqueId((uniqueId, symbolName) => {
+      const variableName = "validatorFor" + symbolName;
+      if (usedVariableNames.has(variableName)) {
+        throw new Error("duplicate variable name: " + variableName);
+      }
+      usedVariableNames.add(variableName);
+      output.set(uniqueId, variableName);
+    });
+    return output;
+  }
+
   public serializeValidators(): string {
+    const uniqueIdToVariableNameMap = this.generateValidatorVariableNames();
+
     const lines: string[] = [];
+
+    // declare the stubs first
+    lines.push("/*** BEGIN stubs");
+    lines.push("const stubs = {");
+    for (const variableName of uniqueIdToVariableNameMap.values()) {
+      lines.push(`  ${variableName}: Stub.createStub<Validator>(),`);
+    }
+    removeFromLastLine(lines, ",");
+    lines.push("};");
+    lines.push("/*** END stubs");
+    lines.push("");
 
     for (const [sourceFileName, innerMap] of this.idMap.entries()) {
       lines.push(`/*** BEGIN "${sourceFileName}"`);
 
       for (const [symbolName, uniqueId] of innerMap) {
         const validator = assertDefined(this.validatorMap.get(uniqueId))();
-        lines.push(`export const validate${symbolName} = `);
-        pullNextThingOntoThisLine(lines, () => {
-          serializeValidator(lines, validator, 0);
-        });
-        addToLastLine(lines, ";");
+        const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
+        lines.push(`export const ${variableName} =`);
+        lines.push("  Stub.assign(");
+        lines.push(`    stubs.${variableName},`);
+        serializeValidator(lines, validator, uniqueIdToVariableNameMap, 2);
+        lines.push("  );");
       }
 
       lines.push(`/*** END "${sourceFileName}"`);
+      lines.push("");
     }
 
     return lines.join("\n");

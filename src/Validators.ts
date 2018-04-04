@@ -151,68 +151,6 @@ export class ExactValueValidator<T> extends Validator<T> {
   }
 }
 
-export class PassThroughValidator<T> extends Validator<T> {
-  private privateDelegate?: Validator<T>;
-
-  public readonly key: string;
-
-  set delegate(validator: Validator<T>) {
-    if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
-      throw new Error("delegate can't be set twice");
-    } else {
-      this.privateDelegate = validator;
-    }
-  }
-
-  get delegate(): Validator<T> {
-    if (this.privateDelegate === undefined) {
-      throw new Error("delegate is not set");
-    } else {
-      return this.privateDelegate;
-    }
-  }
-
-  constructor(key: string) {
-    super();
-    this.key = key;
-  }
-
-  public validate(input: any): T {
-    return this.delegate.validate(input);
-  }
-
-  public describe() {
-    return Validator.describeHelper("PassThroughValidator", {
-      key: this.key,
-      delegateIsSet: (this.privateDelegate !== undefined)
-    });
-  }
-}
-
-export class PassThroughValidatorFactory {
-  private unresolvedKeyToPTVMap: Map<string, PassThroughValidator<any>> = new Map();
-
-  public getOrCreatePTV(key: string): PassThroughValidator<any> {
-    let validator = this.unresolvedKeyToPTVMap.get(key);
-    if (validator === undefined) {
-      validator = new PassThroughValidator<any>(key);
-      this.unresolvedKeyToPTVMap.set(key, validator);
-    }
-    return validator;
-  }
-
-  public resolve(keyToValidatorMap: Map<string, () => Validator<any>>) {
-    this.unresolvedKeyToPTVMap.forEach((ptv, key) => {
-      const validator = keyToValidatorMap.get(key);
-      if (!validator) {
-        throw new Error("no validator found for key: " + key);
-      }
-      ptv.delegate = validator();
-    });
-    this.unresolvedKeyToPTVMap.clear();
-  }
-}
-
 export const undefinedValidator: Validator<undefined> = new ExactValueValidator(
   undefined
 );
