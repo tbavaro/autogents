@@ -9,9 +9,9 @@ export class ValidationError extends Error {
   }
 }
 
-export abstract class Validator<T> {
+export abstract class Validator {
   // throws ValidationError if validation fails
-  public abstract validate(input: any): T;
+  public abstract validate(input: any): void;
 
   public abstract describe(): {};
 
@@ -21,15 +21,15 @@ export abstract class Validator<T> {
 }
 
 // TODO it's probably not good to use exceptions for "normal" cases like "or"
-export class OrValidator extends Validator<any> {
-  public readonly validators: ReadonlyArray<Validator<any>>;
+export class OrValidator extends Validator {
+  public readonly validators: ReadonlyArray<Validator>;
 
-  constructor(validators: Array<Validator<any>>) {
+  constructor(validators: Validator[]) {
     super();
     this.validators = validators;
   }
 
-  public validate(input: any): any {
+  public validate(input: any) {
     const succeeded =
       undefined !==
       this.validators.find(validator => {
@@ -48,8 +48,6 @@ export class OrValidator extends Validator<any> {
     if (!succeeded) {
       throw new ValidationError("OrValidator failed");
     }
-
-    return input;
   }
 
   public describe() {
@@ -59,17 +57,17 @@ export class OrValidator extends Validator<any> {
   }
 }
 
-export class ObjectValidator<T> extends Validator<T> {
+export class ObjectValidator extends Validator {
   public readonly propertyValidators: Readonly<{
-    [propertyName: string]: Validator<any>;
+    [propertyName: string]: Validator;
   }>;
 
-  constructor(propertyValidators: { [propertyName: string]: Validator<any> }) {
+  constructor(propertyValidators: { [propertyName: string]: Validator }) {
     super();
     this.propertyValidators = propertyValidators;
   }
 
-  public validate(input: any): T {
+  public validate(input: any) {
     // TODO maybe reject if we see any values that aren't supposed to be there
 
     if (typeof input !== "object" || input instanceof Array || input === null) {
@@ -92,8 +90,6 @@ export class ObjectValidator<T> extends Validator<T> {
         }
       }
     );
-
-    return input as T;
   }
 
   public describe() {
@@ -107,7 +103,7 @@ export class ObjectValidator<T> extends Validator<T> {
   }
 }
 
-export class TypeOfValidator<T> extends Validator<T> {
+export class TypeOfValidator extends Validator {
   public readonly typeOfString: string;
 
   constructor(typeOfString: string) {
@@ -115,11 +111,10 @@ export class TypeOfValidator<T> extends Validator<T> {
     this.typeOfString = typeOfString;
   }
 
-  public validate(input: any): T {
+  public validate(input: any) {
     if (typeof input !== this.typeOfString) {
       throw new ValidationError("TypeOfValidator failed");
     }
-    return input as T;
   }
 
   public describe() {
@@ -129,19 +124,18 @@ export class TypeOfValidator<T> extends Validator<T> {
   }
 }
 
-export class ExactValueValidator<T> extends Validator<T> {
-  public readonly value: Readonly<T>;
+export class ExactValueValidator extends Validator {
+  public readonly value: Readonly<any>;
 
-  constructor(value: T) {
+  constructor(value: any) {
     super();
     this.value = value;
   }
 
-  public validate(input: any): T {
+  public validate(input: any) {
     if (input !== this.value) {
       throw new ValidationError("ExactValueValidator failed");
     }
-    return input as T;
   }
 
   public describe() {
@@ -151,12 +145,15 @@ export class ExactValueValidator<T> extends Validator<T> {
   }
 }
 
-export const undefinedValidator: Validator<undefined> = new ExactValueValidator(
-  undefined
-);
-export const nullValidator: Validator<null> = new ExactValueValidator(null);
-export const stringValidator: Validator<string> = new TypeOfValidator("string");
-export const numberValidator: Validator<number> = new TypeOfValidator("number");
-export const booleanValidator: Validator<boolean> = new TypeOfValidator(
-  "boolean"
-);
+export const undefinedValidator: Validator = new ExactValueValidator(undefined);
+export const nullValidator: Validator = new ExactValueValidator(null);
+export const stringValidator: Validator = new TypeOfValidator("string");
+export const numberValidator: Validator = new TypeOfValidator("number");
+export const booleanValidator: Validator = new TypeOfValidator("boolean");
+
+export function createValidationFunction<T>(validator: Validator): (input: any) => T {
+  return (input => {
+    validator.validate(input);
+    return input as T;
+  });
+}

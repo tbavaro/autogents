@@ -15,8 +15,8 @@ afterAll(() => {
   generator = null as any;
 });
 
-function getValidator<T>(symbol: string): Validator<T> {
-  return generator.getValidator(sourceFileName, symbol) as Validator<T>;
+function getValidator(symbol: string): Validator {
+  return generator.getValidator(sourceFileName, symbol);
 }
 
 function createInputTests(attrs: {
@@ -28,7 +28,7 @@ function createInputTests(attrs: {
     const name = `valid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
       const validator = getValidator(attrs.symbol);
-      expect(validator.validate(input)).toBe(input);
+      expect(() => validator.validate(input)).not.toThrow();
     });
   });
 

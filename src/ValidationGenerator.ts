@@ -4,12 +4,12 @@ import * as Validators from "./Validators";
 import { Validator } from "./Validators";
 
 // these get replaced by stub references in the generated output
-class StubValidator<T> extends Validator<T> {
-  private privateDelegate?: Validator<T>;
+class StubValidator extends Validator {
+  private privateDelegate?: Validator;
 
   public readonly key: string;
 
-  set delegate(validator: Validator<T>) {
+  set delegate(validator: Validator) {
     if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
       throw new Error("delegate can't be set twice");
     } else {
@@ -17,7 +17,7 @@ class StubValidator<T> extends Validator<T> {
     }
   }
 
-  get delegate(): Validator<T> {
+  get delegate(): Validator {
     if (this.privateDelegate === undefined) {
       throw new Error("delegate is not set");
     } else {
@@ -30,8 +30,8 @@ class StubValidator<T> extends Validator<T> {
     this.key = key;
   }
 
-  public validate(input: any): T {
-    return this.delegate.validate(input);
+  public validate(input: any) {
+    this.delegate.validate(input);
   }
 
   public describe() {
@@ -43,18 +43,18 @@ class StubValidator<T> extends Validator<T> {
 }
 
 class StubValidatorFactory {
-  private unresolvedKeyToPTVMap: Map<string, StubValidator<any>> = new Map();
+  private unresolvedKeyToPTVMap: Map<string, StubValidator> = new Map();
 
-  public getOrCreatePTV(key: string): StubValidator<any> {
+  public getOrCreatePTV(key: string): StubValidator {
     let validator = this.unresolvedKeyToPTVMap.get(key);
     if (validator === undefined) {
-      validator = new StubValidator<any>(key);
+      validator = new StubValidator(key);
       this.unresolvedKeyToPTVMap.set(key, validator);
     }
     return validator;
   }
 
-  public resolve(keyToValidatorMap: Map<string, () => Validator<any>>) {
+  public resolve(keyToValidatorMap: Map<string, () => Validator>) {
     this.unresolvedKeyToPTVMap.forEach((ptv, key) => {
       const validator = keyToValidatorMap.get(key);
       if (!validator) {
@@ -76,9 +76,9 @@ function createObjectValidatorFor(
   typeChecker: ts.TypeChecker,
   path: string,
   context: Context
-): Validators.ObjectValidator<any> {
+): Validators.ObjectValidator {
   const propertyValidators: {
-    [propertyName: string]: Validator<any>;
+    [propertyName: string]: Validator;
   } = {};
   properties.forEach(property => {
     const propType = typeChecker.getTypeOfSymbolAtLocation(
@@ -99,14 +99,14 @@ function createObjectValidatorFor(
 
 type ReusableValidatorEntry = {
   predicate: (type: ts.Type) => boolean;
-  validator: Validator<any>;
+  validator: Validator;
 };
 
 const reusableValidators: ReusableValidatorEntry[] = [];
 
 function addSimpleFlagBasedValidator(
   flag: ts.TypeFlags,
-  validator: Validator<any>
+  validator: Validator
 ) {
   reusableValidators.push({
     predicate: type => TypescriptHelpers.flagsMatch(type.flags, flag),
@@ -166,7 +166,7 @@ function getValidatorFor(
   path: string,
   context: Context,
   isRoot?: boolean
-): Validator<any> {
+): Validator {
   isRoot = !!isRoot;
 
   if (!isRoot) {
@@ -277,7 +277,7 @@ function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
 
 function serializeValidator(
   outputRows: string[],
-  validator: Validator<any>,
+  validator: Validator,
   uniqueIdToVariableNameMap: Map<string, string>,
   indent?: number) {
   const addComma = () => addToLastLine(outputRows, ",");
@@ -341,7 +341,7 @@ export default class ValidationGenerator {
   private readonly idMap: Map<string, Map<string, string>>;
 
   // unique id -> () -> Validator
-  private readonly validatorMap: Map<string, () => Validator<any>>;
+  private readonly validatorMap: Map<string, () => Validator>;
 
   constructor(sourceFileNames: string[]) {
     const options: ts.CompilerOptions = {
@@ -363,10 +363,10 @@ export default class ValidationGenerator {
       throw new Error(`no source file found with name: ${sourceFileName}`);
     }
 
-    const output: Map<string, () => Validator<any>> = new Map();
+    const output: Map<string, () => Validator> = new Map();
 
     // xcxc maybe i don't need this and it can just be part of the closure below?
-    const cache: Map<string, Validator<any>> = new Map();
+    const cache: Map<string, Validator> = new Map();
 
     const context: Context = {
       ptvFactory: this.ptvFactory
@@ -402,7 +402,7 @@ export default class ValidationGenerator {
 
   public generateValidatorsFor(
     sourceFileName: string
-  ): Map<string, Validator<any>> {
+  ): Map<string, Validator> {
     const submap = this.idMap.get(sourceFileName);
     if (submap === undefined) {
       throw new Error("no entries for source file: " + sourceFileName);
@@ -413,7 +413,7 @@ export default class ValidationGenerator {
     );
   }
 
-  public getValidator(sourceFileName: string, symbolName: string): Validator<any> {
+  public getValidator(sourceFileName: string, symbolName: string): Validator {
     const submap = this.idMap.get(sourceFileName);
     if (submap === undefined) {
       throw new Error("no entries for source file: " + sourceFileName);
