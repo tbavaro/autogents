@@ -1,5 +1,4 @@
 import * as ts from "typescript";
-import * as Test from "../inputs/test";
 import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Utils from "./Utils";
 import ValidationGenerator from "./ValidationGenerator";
