@@ -35,3 +35,25 @@ export function pushAll<V>(array: V[], values: Iterable<V>) {
     array.push(v);
   }
 }
+
+export function addAll<V>(target: Set<V>, values: Iterable<V>) {
+  for (const v of values) {
+    target.add(v);
+  }
+}
+
+export function transformSetValues<V1, V2>(
+  input: Set<V1>,
+  transform: (value: V1) => V2,
+  allowCollisions?: boolean
+): Set<V2> {
+  const output = new Set<V2>();
+  for (const value of input) {
+    const newValue = transform(value);
+    if (!allowCollisions && output.has(newValue)) {
+      throw new Error("collision during set transform: " + newValue);
+    }
+    output.add(newValue);
+  }
+  return output;
+}

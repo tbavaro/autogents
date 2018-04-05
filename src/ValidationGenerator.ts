@@ -1,6 +1,7 @@
 import * as ts from "typescript";
 import TypescriptCodeStringBuilder from "./TypescriptCodeStringBuilder";
 import * as TypescriptHelpers from "./TypescriptHelpers";
+import * as Utils from "./Utils";
 import * as Validators from "./Validators";
 import { Validator } from "./Validators";
 
@@ -278,6 +279,7 @@ function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
 
 function serializeValidator(
   output: TypescriptCodeStringBuilder,
+  referencedUniqueIds: Set<string>,
   validator: Validator,
   uniqueIdToVariableNameMap: Map<string, string>
 ): TypescriptCodeStringBuilder {
@@ -295,14 +297,24 @@ function serializeValidator(
     output.append("new ObjectValidator({");
     for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
       output.append(`${s(pName)}: `);
-      serializeValidator(output, pValidator, uniqueIdToVariableNameMap);
+      serializeValidator(
+        output,
+        referencedUniqueIds,
+        pValidator,
+        uniqueIdToVariableNameMap
+      );
       output.append(",");
     }
     output.append("})");
   } else if (validator instanceof Validators.OrValidator) {
     output.append("new OrValidator([");
     for (const subValidator of validator.validators) {
-      serializeValidator(output, subValidator, uniqueIdToVariableNameMap);
+      serializeValidator(
+        output,
+        referencedUniqueIds,
+        subValidator,
+        uniqueIdToVariableNameMap
+      );
       output.append(",");
     }
     output.append("])");
@@ -311,8 +323,10 @@ function serializeValidator(
   } else if (validator instanceof Validators.ExactValueValidator) {
     output.append(`new ExactValueValidator(${s(validator.value)})`);
   } else if (validator instanceof StubValidator) {
-    const variableName = assertDefined(uniqueIdToVariableNameMap.get(validator.key));
+    const uniqueId = validator.key;
+    const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
     output.append(`stubs.${variableName}`);
+    referencedUniqueIds.add(uniqueId);
   } else {
     throw new Error("unable to serialize validator: " + validator.describe().kind);
   }
@@ -440,6 +454,36 @@ export default class ValidationGenerator {
   public serializeValidators(): string {
     const uniqueIdToVariableNameMap = this.generateValidatorVariableNames();
 
+    const variableNameToCodeSnippetMap = new Map<string, string>();
+    const allReferencedVariableNames = new Set<string>();
+
+    for (const [sourceFileName, innerMap] of this.idMap.entries()) {
+      for (const [symbolName, uniqueId] of innerMap) {
+        const validator = assertDefined(this.validatorMap.get(uniqueId))();
+        const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
+
+        const variableOutput = new TypescriptCodeStringBuilder();
+        const variableReferencedUniqueIds = new Set<string>();
+        serializeValidator(
+          variableOutput,
+          variableReferencedUniqueIds,
+          validator,
+          uniqueIdToVariableNameMap
+        );
+
+        const variableReferencedVariableNames = Utils.transformSetValues(
+          variableReferencedUniqueIds,
+          id => assertDefined(uniqueIdToVariableNameMap.get(id))
+        );
+
+        variableNameToCodeSnippetMap.set(variableName, variableOutput.build());
+        Utils.addAll(allReferencedVariableNames, variableReferencedVariableNames);
+      }
+    }
+
+    // TODO if we do topo sort we can minimize stubbing
+    const stubbedVariableNames = allReferencedVariableNames;
+
     const output = new TypescriptCodeStringBuilder();
 
     output.appendLines([
@@ -449,26 +493,31 @@ export default class ValidationGenerator {
     ]);
 
     // declare the stubs first
-    output.appendSection("stubs", () => {
-      output.append("const stubs = {");
-      for (const variableName of uniqueIdToVariableNameMap.values()) {
-        output.append(`${variableName}: Stub.createStub<Validator>(),`);
-      }
-      output.append("};");
-    });
-
-    for (const [sourceFileName, innerMap] of this.idMap.entries()) {
-      output.appendSection(`"${sourceFileName}"`, () => {
-        for (const [symbolName, uniqueId] of innerMap) {
-          const validator = assertDefined(this.validatorMap.get(uniqueId))();
-          const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
-          output.append(`export const ${variableName} = Stub.assign(stubs.${variableName},`);
-          serializeValidator(output, validator, uniqueIdToVariableNameMap);
-          output.append(");");
-          output.appendNewLine();
+    if (stubbedVariableNames.size > 0) {
+      output.appendSection("stubs", () => {
+        output.append("const stubs = {");
+        for (const variableName of stubbedVariableNames) {
+          output.append(`${variableName}: Stub.createStub<Validator>(),`);
         }
+        output.append("};");
       });
     }
+
+    output.appendSection("validators", () => {
+      for (const [variableName, codeSnippet] of variableNameToCodeSnippetMap.entries()) {
+        output.append(`export const ${variableName} =`);
+        const stubbed = stubbedVariableNames.has(variableName);
+        if (stubbed) {
+          output.append(`Stub.assign(stubs.${variableName},`);
+        }
+        output.append(codeSnippet);
+        if (stubbed) {
+          output.append(")");
+        }
+        output.append(";");
+        output.appendNewLine();
+      }
+    });
 
     return output.buildPretty();
   }
