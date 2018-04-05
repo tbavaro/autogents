@@ -1,4 +1,5 @@
 import * as ts from "typescript";
+import TypescriptCodeStringBuilder from "./TypescriptCodeStringBuilder";
 import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Validators from "./Validators";
 import { Validator } from "./Validators";
@@ -276,60 +277,47 @@ function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
 }
 
 function serializeValidator(
-  outputRows: string[],
+  output: TypescriptCodeStringBuilder,
   validator: Validator,
-  uniqueIdToVariableNameMap: Map<string, string>,
-  indent?: number) {
-  const addComma = () => addToLastLine(outputRows, ",");
-  const removeComma = () => removeFromLastLine(outputRows, ",");
-
-  indent = indent || 0;
-  const prefix = "  ".repeat(indent);
-  const nextPrefix = prefix + "  ";
-
+  uniqueIdToVariableNameMap: Map<string, string>
+): TypescriptCodeStringBuilder {
   if (validator === Validators.numberValidator) {
-    outputRows.push(prefix + "Validators.numberValidator");
+    output.append("Validators.numberValidator");
   } else if (validator === Validators.stringValidator) {
-    outputRows.push(prefix + "Validators.stringValidator");
+    output.append("Validators.stringValidator");
   } else if (validator === Validators.booleanValidator) {
-    outputRows.push(prefix + "Validators.booleanValidator");
+    output.append("Validators.booleanValidator");
   } else if (validator === Validators.nullValidator) {
-    outputRows.push(prefix + "Validators.nullValidator");
+    output.append("Validators.nullValidator");
   } else if (validator === Validators.undefinedValidator) {
-    outputRows.push(prefix + "Validators.undefinedValidator");
+    output.append("Validators.undefinedValidator");
   } else if (validator instanceof Validators.ObjectValidator) {
-    outputRows.push(prefix + "new ObjectValidator({");
-    if (Object.keys(validator.propertyValidators).length > 0) {
-      for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
-        outputRows.push(nextPrefix + `${s(pName)}: `);
-        pullNextThingOntoThisLine(outputRows, () => {
-          serializeValidator(outputRows, pValidator, uniqueIdToVariableNameMap, (indent || 0) + 1);
-        });
-        addComma();
-      }
-      removeComma();
+    output.append("new ObjectValidator({");
+    for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
+      output.append(`${s(pName)}: `);
+      serializeValidator(output, pValidator, uniqueIdToVariableNameMap);
+      output.append(",");
     }
-    outputRows.push(prefix + "})");
+    output.append("})");
   } else if (validator instanceof Validators.OrValidator) {
-    outputRows.push(prefix + "new OrValidator([");
-    if (validator.validators.length > 0) {
-      for (const subValidator of validator.validators) {
-        serializeValidator(outputRows, subValidator, uniqueIdToVariableNameMap, indent + 1);
-        addComma();
-      }
-      removeComma();
+    output.append("new OrValidator([");
+    for (const subValidator of validator.validators) {
+      serializeValidator(output, subValidator, uniqueIdToVariableNameMap);
+      output.append(",");
     }
-    outputRows.push(prefix + "])");
+    output.append("])");
   } else if (validator instanceof Validators.TypeOfValidator) {
-    outputRows.push(prefix + `new TypeOfValidator(${s(validator.typeOfString)})`);
+    output.append(`new TypeOfValidator(${s(validator.typeOfString)})`);
   } else if (validator instanceof Validators.ExactValueValidator) {
-    outputRows.push(prefix + `new ExactValueValidator(${s(validator.value)})`);
+    output.append(`new ExactValueValidator(${s(validator.value)})`);
   } else if (validator instanceof StubValidator) {
     const variableName = assertDefined(uniqueIdToVariableNameMap.get(validator.key));
-    outputRows.push(prefix + `stubs.${variableName}`);
+    output.append(`stubs.${variableName}`);
   } else {
-    outputRows.push(prefix + "/* something else */");
+    throw new Error("unable to serialize validator: " + validator.describe().kind);
   }
+
+  return output;
 }
 
 export default class ValidationGenerator {
@@ -452,36 +440,36 @@ export default class ValidationGenerator {
   public serializeValidators(): string {
     const uniqueIdToVariableNameMap = this.generateValidatorVariableNames();
 
-    const lines: string[] = [];
+    const output = new TypescriptCodeStringBuilder();
+
+    output.appendLines([
+      "/* AUTO-GENERATED from autogents -- DO NOT EDIT! */",
+      "",
+      'import * as Validator from "Validators";'
+    ]);
 
     // declare the stubs first
-    lines.push("/*** BEGIN stubs");
-    lines.push("const stubs = {");
-    for (const variableName of uniqueIdToVariableNameMap.values()) {
-      lines.push(`  ${variableName}: Stub.createStub<Validator>(),`);
-    }
-    removeFromLastLine(lines, ",");
-    lines.push("};");
-    lines.push("/*** END stubs");
-    lines.push("");
+    output.appendSection("stubs", () => {
+      output.append("const stubs = {");
+      for (const variableName of uniqueIdToVariableNameMap.values()) {
+        output.append(`${variableName}: Stub.createStub<Validator>(),`);
+      }
+      output.append("};");
+    });
 
     for (const [sourceFileName, innerMap] of this.idMap.entries()) {
-      lines.push(`/*** BEGIN "${sourceFileName}"`);
-
-      for (const [symbolName, uniqueId] of innerMap) {
-        const validator = assertDefined(this.validatorMap.get(uniqueId))();
-        const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
-        lines.push(`export const ${variableName} =`);
-        lines.push("  Stub.assign(");
-        lines.push(`    stubs.${variableName},`);
-        serializeValidator(lines, validator, uniqueIdToVariableNameMap, 2);
-        lines.push("  );");
-      }
-
-      lines.push(`/*** END "${sourceFileName}"`);
-      lines.push("");
+      output.appendSection(`"${sourceFileName}"`, () => {
+        for (const [symbolName, uniqueId] of innerMap) {
+          const validator = assertDefined(this.validatorMap.get(uniqueId))();
+          const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
+          output.append(`export const ${variableName} = Stub.assign(stubs.${variableName},`);
+          serializeValidator(output, validator, uniqueIdToVariableNameMap);
+          output.append(");");
+          output.appendNewLine();
+        }
+      });
     }
 
-    return lines.join("\n");
+    return output.buildPretty();
   }
 }

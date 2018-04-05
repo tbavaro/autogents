@@ -30,6 +30,8 @@
     "watch:test": "jest --watch"
   },
   "dependencies": {
+    "@types/prettier": "^1.10.0",
+    "prettier": "^1.5.2",
     "typescript": "^2.3.0"
   },
   "devDependencies": {
@@ -37,7 +39,6 @@
     "@types/node": "^8.0.0",
     "coveralls": "^2.0.0",
     "jest": "^22.0.4",
-    "prettier": "^1.5.2",
     "rimraf": "^2.0.0",
     "ts-jest": "^22.0.1",
     "ts-node": "^3.2.0",

@@ -13,9 +13,9 @@ export abstract class Validator {
   // throws ValidationError if validation fails
   public abstract validate(input: any): void;
 
-  public abstract describe(): {};
+  public abstract describe(): { kind: string };
 
-  protected static describeHelper(kind: string, otherProperties?: {}): {} {
+  protected static describeHelper(kind: string, otherProperties?: {}): { kind: string } {
     return { kind: kind, ...otherProperties };
   }
 }
