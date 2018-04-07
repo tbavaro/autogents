@@ -10,3 +10,4 @@ export declare function mapToPOJO<V>(input: Map<string, V>): {
 export declare function pushAll<V>(array: V[], values: Iterable<V>): void;
 export declare function addAll<V>(target: Set<V>, values: Iterable<V>): void;
 export declare function transformSetValues<V1, V2>(input: Set<V1>, transform: (value: V1) => V2, allowCollisions?: boolean): Set<V2>;
+export declare function assertDefined<T>(value: T | undefined): T;

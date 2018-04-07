@@ -1,5 +1,3 @@
-import * as Utils from "./Utils";
-
 export class ValidationError extends Error {
   public readonly cause?: ValidationError;
 
@@ -93,12 +91,14 @@ export class ObjectValidator extends Validator {
   }
 
   public describe() {
+    const children: { [k: string]: {} } = {};
+    for (const key of Object.keys(this.propertyValidators)) {
+      const validator = this.propertyValidators[key];
+      children[key] = validator.describe();
+    }
+
     return Validator.describeHelper("ObjectValidator", {
-      propertyValidators:
-        Utils.transformPOJOValues(
-          this.propertyValidators,
-          (validator) => validator.describe()
-        )
+      propertyValidators: children
     });
   }
 }

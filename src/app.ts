@@ -1,12 +1,13 @@
 import * as ts from "typescript";
 import * as TypescriptHelpers from "./TypescriptHelpers";
-import * as Utils from "./Utils";
+// import * as Utils from "./Utils";
 import ValidationGenerator from "./ValidationGenerator";
-import { Validator } from "./Validators";
+// import { Validator } from "./Validators";
 
 function run() {
   const rootName = "src/ValidationGenerator.TestTypes.ts";
 
+  console.log(TypescriptHelpers.syntaxKindToString(ts.SyntaxKind.ArrowFunction));
   const generator = new ValidationGenerator([rootName]);
 
   // console.log(`============ ${rootName}`);

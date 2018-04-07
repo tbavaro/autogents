@@ -246,35 +246,8 @@ function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
   }
 }
 
-function assertDefined<T>(value: T | undefined): T {
-  if (value === undefined) {
-    throw new Error("unexpected undefined");
-  }
-  return value;
-}
-
 function s(value: any): string {
   return JSON.stringify(value);
-}
-
-function addToLastLine(outputRows: string[], str: string) {
-  outputRows[outputRows.length - 1] += str;
-}
-
-function removeFromLastLine(outputRows: string[], str: string) {
-  if (outputRows[outputRows.length - 1].endsWith(str)) {
-    outputRows[outputRows.length - 1] = outputRows[outputRows.length - 1].slice(0, outputRows[outputRows.length - 1].length - str.length);
-  } else {
-    throw new Error(`expected line to end with "${str}" but it didn't`);
-  }
-}
-
-function pullNextThingOntoThisLine(outputRows: string[], func: () => void) {
-  const rowIndex = outputRows.length - 1;
-  const oldRow = outputRows[rowIndex];
-  outputRows.splice(rowIndex, 1);
-  func();
-  outputRows[rowIndex] = oldRow + outputRows[rowIndex].trimLeft();
 }
 
 function serializeValidator(
@@ -324,7 +297,7 @@ function serializeValidator(
     output.append(`new ExactValueValidator(${s(validator.value)})`);
   } else if (validator instanceof StubValidator) {
     const uniqueId = validator.key;
-    const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
+    const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
     output.append(`stubs.${variableName}`);
     referencedUniqueIds.add(uniqueId);
   } else {
@@ -365,11 +338,6 @@ export default class ValidationGenerator {
       throw new Error(`no source file found with name: ${sourceFileName}`);
     }
 
-    const output: Map<string, () => Validator> = new Map();
-
-    // xcxc maybe i don't need this and it can just be part of the closure below?
-    const cache: Map<string, Validator> = new Map();
-
     const context: Context = {
       ptvFactory: this.ptvFactory
     };
@@ -377,7 +345,11 @@ export default class ValidationGenerator {
     const symbolNamesToUniqueIdsMap = new Map<string, string>();
     this.idMap.set(sourceFileName, symbolNamesToUniqueIdsMap);
 
-    TypescriptHelpers.findExports(sourceFile, this.program).forEach(stmt => {
+    const eligibleStatements =
+      TypescriptHelpers.findExports(sourceFile).filter(stmt => {
+        return TypescriptHelpers.hasAutogentsJSDocFlag(stmt, "validator");
+      });
+    eligibleStatements.forEach(stmt => {
       const type = this.typeChecker.getTypeAtLocation(stmt);
       let name: string;
       if (ts.isTypeAliasDeclaration(stmt)) {
@@ -411,7 +383,7 @@ export default class ValidationGenerator {
     }
     return transformMapValues(
       submap,
-      uniqueId => assertDefined(this.validatorMap.get(uniqueId))()
+      uniqueId => Utils.assertDefined(this.validatorMap.get(uniqueId))()
     );
   }
 
@@ -424,7 +396,7 @@ export default class ValidationGenerator {
     if (uniqueId === undefined) {
       throw new Error(`source file "${sourceFileName}" has no symbol "${symbolName}"`);
     }
-    return assertDefined(this.validatorMap.get(uniqueId))();
+    return Utils.assertDefined(this.validatorMap.get(uniqueId))();
   }
 
   private forEachUniqueId(func: (uniqueId: string, symbolName: string, sourceFileName: string) => void) {
@@ -457,10 +429,10 @@ export default class ValidationGenerator {
     const variableNameToCodeSnippetMap = new Map<string, string>();
     const allReferencedVariableNames = new Set<string>();
 
-    for (const [sourceFileName, innerMap] of this.idMap.entries()) {
-      for (const [symbolName, uniqueId] of innerMap) {
-        const validator = assertDefined(this.validatorMap.get(uniqueId))();
-        const variableName = assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
+    for (const innerMap of this.idMap.values()) {
+      for (const uniqueId of innerMap.values()) {
+        const validator = Utils.assertDefined(this.validatorMap.get(uniqueId))();
+        const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
 
         const variableOutput = new TypescriptCodeStringBuilder();
         const variableReferencedUniqueIds = new Set<string>();
@@ -473,7 +445,7 @@ export default class ValidationGenerator {
 
         const variableReferencedVariableNames = Utils.transformSetValues(
           variableReferencedUniqueIds,
-          id => assertDefined(uniqueIdToVariableNameMap.get(id))
+          id => Utils.assertDefined(uniqueIdToVariableNameMap.get(id))
         );
 
         variableNameToCodeSnippetMap.set(variableName, variableOutput.build());

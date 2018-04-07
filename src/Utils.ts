@@ -57,3 +57,10 @@ export function transformSetValues<V1, V2>(
   }
   return output;
 }
+
+export function assertDefined<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error("unexpected undefined");
+  }
+  return value;
+}
