@@ -1,9 +1,9 @@
+import * as Validators from "tsvalidators";
+import { Validator } from "tsvalidators";
 import * as ts from "typescript";
 import TypescriptCodeStringBuilder from "./TypescriptCodeStringBuilder";
 import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Utils from "./Utils";
-import * as Validators from "./Validators";
-import { Validator } from "./Validators";
 
 // these get replaced by stub references in the generated output
 class StubValidator extends Validator {

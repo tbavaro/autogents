@@ -1,5 +1,5 @@
+import { ValidationError, Validator } from "tsvalidators";
 import ValidationGenerator from "./ValidationGenerator";
-import { ValidationError, Validator } from "./Validators";
 
 let generator: ValidationGenerator;
 const sourceFileName = "src/ValidationGenerator.TestTypes.ts";

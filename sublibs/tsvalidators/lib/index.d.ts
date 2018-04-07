@@ -1,6 +1,6 @@
 export declare class ValidationError extends Error {
-    readonly cause?: ValidationError;
-    constructor(msg: string, cause?: ValidationError);
+    readonly causes?: ValidationError[];
+    constructor(msg: string, causes?: ValidationError[]);
 }
 export declare abstract class Validator {
     abstract validate(input: any): void;

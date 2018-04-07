@@ -1,4 +1,4 @@
-import { Validator } from "./Validators";
+import { Validator } from "tsvalidators";
 export default class ValidationGenerator {
     private readonly program;
     private readonly typeChecker;

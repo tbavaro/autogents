@@ -1,9 +1,9 @@
 export class ValidationError extends Error {
-  public readonly cause?: ValidationError;
+  public readonly causes?: ValidationError[];
 
-  constructor(msg: string, cause?: ValidationError) {
+  constructor(msg: string, causes?: ValidationError[]) {
     super(msg);
-    this.cause = cause;
+    this.causes = causes;
   }
 }
 
@@ -28,6 +28,7 @@ export class OrValidator extends Validator {
   }
 
   public validate(input: any) {
+    const failures: ValidationError[] = [];
     const succeeded =
       undefined !==
       this.validators.find(validator => {
@@ -36,6 +37,7 @@ export class OrValidator extends Validator {
           return true;
         } catch (e) {
           if (e instanceof ValidationError) {
+            failures.push(e);
             return false;
           } else {
             throw e;
@@ -44,7 +46,7 @@ export class OrValidator extends Validator {
       });
 
     if (!succeeded) {
-      throw new ValidationError("OrValidator failed");
+      throw new ValidationError("OrValidator failed", failures);
     }
   }
 
@@ -80,7 +82,7 @@ export class ObjectValidator extends Validator {
           if (e instanceof ValidationError) {
             throw new ValidationError(
               `ObjectValidator failed; property "${propertyName}"`,
-              e
+              [e]
             );
           } else {
             throw e;
