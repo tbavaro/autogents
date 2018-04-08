@@ -1,5 +1,6 @@
 import { ValidationError, Validator } from "tsvalidators";
-import ValidationGenerator from "./ValidationGenerator";
+import * as Validators from "tsvalidators";
+import ValidationGenerator, { StubValidator } from "./ValidationGenerator";
 
 let generator: ValidationGenerator;
 const sourceFileName = "src/ValidationGenerator.TestTypes.ts";
@@ -18,9 +19,18 @@ function getValidator(symbol: string): Validator {
 
 function createInputTests(attrs: {
   symbol: string,
+  directValidatorTest?: (validator: Validator) => void,
   validInputs: any[],
   invalidInputs: any[]
 }) {
+  const directValidatorTest = attrs.directValidatorTest;
+  if (directValidatorTest) {
+    it(`direct validator test for "${attrs.symbol}"`, () => {
+      const validator = getValidator(attrs.symbol);
+      directValidatorTest(validator);
+    });
+  }
+
   attrs.validInputs.forEach(input => {
     const name = `valid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
@@ -182,6 +192,9 @@ createInputTests({
 
 createInputTests({
   symbol: "JustANumberAlias",
+  directValidatorTest: (validator => {
+    expect(validator).toBeInstanceOf(Validators.TypeOfValidator);
+  }),
   validInputs: [
     1,
     0
@@ -231,4 +244,16 @@ createInputTests({
     {},
     { aNumber: 1, anOptional2: { aNumber: 2 } }
   ]
-})
+});
+
+it("pure alias types reuse the validator for the thing it's aliasing", () => {
+  const originalValidator = getValidator("NumberFieldTestObject");
+  const aliasValidator = getValidator("NumberFieldTestObjectAlias");
+
+  // if they are exactly equal then they'll get serialized the same;
+  // we want the original one to get serialized in full and have the alias just
+  // reference the original
+  expect(originalValidator).not.toBe(aliasValidator);
+  expect(aliasValidator).toBeInstanceOf(StubValidator);
+  expect((aliasValidator as StubValidator).delegate).toBe(originalValidator);
+});

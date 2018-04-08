@@ -6,7 +6,7 @@ import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Utils from "./Utils";
 
 // these get replaced by stub references in the generated output
-class StubValidator extends Validator {
+export class StubValidator extends Validator {
   private privateDelegate?: Validator;
 
   public readonly key: string;
@@ -139,15 +139,23 @@ function getValidatorForUnion(
   return new Validators.OrValidator(validators);
 }
 
+function getTypeDeclarationIfPossible(type: ts.Type): ts.Node | undefined {
+  if (!type.symbol || !type.symbol.declarations) {
+    return undefined;
+  }
+
+  if (type.symbol.declarations.length !== 1) {
+    throw new Error(
+      `don't know what to do with symbols with ` +
+      `${type.symbol.declarations.length} declarations: ${type.symbol.name} ${type.flags}`);
+  }
+  const declaration = type.symbol.declarations[0];
+  return declaration.parent;
+}
+
 function getTypeAliasIfPossible(type: ts.Type): string | undefined {
   if (!TypescriptHelpers.typeIsArray(type) && type.symbol && type.symbol.declarations) {
-    if (type.symbol.declarations.length !== 1) {
-      throw new Error(
-        `don't know what to do with symbols with ` +
-        `${type.symbol.declarations.length} declarations: ${type.symbol.name} ${type.flags}`);
-    }
-    const declaration = type.symbol.declarations[0];
-    const parent = declaration.parent;
+    const parent = getTypeDeclarationIfPossible(type);
     if (parent && ts.isTypeAliasDeclaration(parent)) {
       return getUniqueIdentifierForTypeDeclaredAtNode(parent);
       // return ts.idText(parent.name);
@@ -171,13 +179,10 @@ function getValidatorFor(
   context: Context,
   isRoot?: boolean
 ): Validator {
-  isRoot = !!isRoot;
-
-  if (!isRoot) {
-    const typeAliasOrUndefined = getTypeAliasIfPossible(type);
-    if (typeAliasOrUndefined !== undefined) {
-      return context.ptvFactory.getOrCreatePTV(typeAliasOrUndefined);
-    }
+  const typeAliasOrUndefined = getTypeAliasIfPossible(type);
+  if (typeAliasOrUndefined !== undefined &&
+    (!isRoot || getTypeDeclarationIfPossible(type) !== declarationNode)) {
+    return context.ptvFactory.getOrCreatePTV(typeAliasOrUndefined);
   }
 
   const reusableValidatorEntry = reusableValidators.find(entry =>

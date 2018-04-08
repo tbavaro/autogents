@@ -49,3 +49,4 @@ export declare type CycleTestObject2 = {
     aString: string;
     anOptional1?: CycleTestObject1;
 };
+export declare type NumberFieldTestObjectAlias = NumberFieldTestObject;

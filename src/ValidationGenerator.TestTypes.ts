@@ -105,3 +105,8 @@ export type CycleTestObject2 = {
   aString: string;
   anOptional1?: CycleTestObject1;
 }
+
+/**
+ * @autogents validator
+ */
+export type NumberFieldTestObjectAlias = NumberFieldTestObject;
