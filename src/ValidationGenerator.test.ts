@@ -150,6 +150,37 @@ createInputTests({
 });
 
 createInputTests({
+  symbol: "NumbersArrayTestObject",
+  validInputs: [
+    { numbers: [] },
+    { numbers: [ 0 ] },
+    { numbers: [ 1, 2, 3 ] }
+  ],
+  invalidInputs: [
+    { numbers: [ "not a number" ] },
+    { numbers: [ 1, "not a number" ] },
+    { numbers: [ 1, "" ] },
+    { numbers: [ 1, undefined ] },
+  ]
+});
+
+createInputTests({
+  symbol: "NumbersAndOrStringsArrayTestObject",
+  validInputs: [
+    { numbersAndOrStrings: [] },
+    { numbersAndOrStrings: [ 1 ] },
+    { numbersAndOrStrings: [ 1, 2, 3 ] },
+    { numbersAndOrStrings: [ "not a number" ] },
+    { numbersAndOrStrings: [ 1, "not a number" ] },
+    { numbersAndOrStrings: [ 1, "" ] }
+  ],
+  invalidInputs: [
+    { numbersAndOrStrings: [ 1, undefined ] },
+    { numbersAndOrStrings: [ {} ] }
+  ]
+});
+
+createInputTests({
   symbol: "JustANumberAlias",
   validInputs: [
     1,

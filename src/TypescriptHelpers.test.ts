@@ -4,21 +4,32 @@ import { assertDefined } from "./Utils";
 
 const sourceFileName = "src/TypescriptHelpers.TestTypes.ts";
 let program: ts.Program;
+let typeChecker: ts.TypeChecker;
 let sourceFile: ts.SourceFile;
 
 beforeAll(() => {
   program = ts.createProgram([sourceFileName], {});
+  typeChecker = program.getTypeChecker();
   sourceFile = assertDefined(program.getSourceFile(sourceFileName));
 });
 
 afterAll(() => {
   program = null as any;
+  typeChecker = null as any;
   sourceFile = null as any;
 });
 
 function getSymbolDefinedAt(stmt: ts.Statement): string {
   if (ts.isTypeAliasDeclaration(stmt)) {
     return ts.idText(stmt.name);
+  } else {
+    throw new Error("unsupported: " + JSON.stringify(stmt));
+  }
+}
+
+function getTypeDefinedAt(stmt: ts.Statement): ts.Type {
+  if (ts.isTypeAliasDeclaration(stmt)) {
+    return typeChecker.getTypeAtLocation(stmt);
   } else {
     throw new Error("unsupported: " + JSON.stringify(stmt));
   }
@@ -71,4 +82,22 @@ it("ValidatorGeneratedType type does have validator flag", () => {
 it("BadFlagGeneratedType type throws error when looking at flags", () => {
   const stmt = getExportedStatementDefiningSymbol("BadFlagGeneratedType");
   expect(() => hasValidatorFlag(stmt)).toThrow();
+});
+
+it("getArrayElementType works for arrays like number[]", () => {
+  const stmt = getExportedStatementDefiningSymbol("BracketedNumberArrayType");
+  const type = getTypeDefinedAt(stmt);
+  expect(TypescriptHelpers.typeIsArray(type)).toBeTruthy();
+
+  const elementType = TypescriptHelpers.getArrayElementType(type);
+  expect(elementType.flags).toBe(ts.TypeFlags.Number);
+});
+
+it("getArrayElementType works for arrays like Array<number>", () => {
+  const stmt = getExportedStatementDefiningSymbol("GenericNumberArrayType");
+  const type = getTypeDefinedAt(stmt);
+  expect(TypescriptHelpers.typeIsArray(type)).toBeTruthy();
+
+  const elementType = TypescriptHelpers.getArrayElementType(type);
+  expect(elementType.flags).toBe(ts.TypeFlags.Number);
 });

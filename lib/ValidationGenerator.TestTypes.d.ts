@@ -25,6 +25,12 @@ export declare type SwitchedUnionFieldTestObject = ({
     isANumberNotAString: false;
     aString: string;
 });
+export declare type NumbersArrayTestObject = {
+    numbers: number[];
+};
+export declare type NumbersAndOrStringsArrayTestObject = {
+    numbersAndOrStrings: Array<number | string>;
+};
 export declare type JustANumberAlias = number;
 export declare type AnonymousNestedObjectTestObject = {
     anObject: {

@@ -1,4 +1,6 @@
 import * as ts from "typescript";
+import { isNumber } from "util";
+import { assertDefined } from "./Utils";
 
 export function syntaxKindToString(sk: ts.SyntaxKind): string {
   return ts.SyntaxKind[sk];
@@ -55,8 +57,51 @@ export function flagsMatchOneOf<T extends number>(
   );
 }
 
-export function typeIsObject(type: ts.Type): boolean {
+function isPowerOfTwo(n: number): boolean {
+  /* tslint:disable:no-bitwise */
+  return (n !== 0 && ((n & (n - 1)) === 0));
+  /* tslint:enable*/
+}
+
+function flagsToStrings(flagType: any, flags: any): string[] {
+  const output: string[] = [];
+  for (const flagKey of Object.keys(flagType)) {
+    const flagValue = flagType[flagKey];
+    if (isNumber(flagValue) && isPowerOfTwo(flagValue)) {
+      /* tslint:disable:no-bitwise */
+      if (flags & flagValue) {
+        output.push(flagKey);
+      }
+      /* tslint:enable */
+      console.log(flagKey, typeof flagValue, flagValue);
+    }
+  }
+  return output;
+}
+
+export function nodeFlagsToStrings(flags: ts.NodeFlags): string[] {
+  return flagsToStrings(ts.NodeFlags, flags);
+}
+
+function objectTypeIsArray(type: ts.Type): boolean {
+  if (!type.symbol || type.symbol.name !== "Array") {
+    return false;
+  }
+
+  const declarations = assertDefined(type.symbol.declarations);
+  return declarations.every(d => d.getSourceFile().fileName.endsWith("typescript/lib/lib.d.ts"));
+}
+
+function typeIsObjectOrArray(type: ts.Type): boolean {
   return flagsMatch(type.flags, ts.TypeFlags.Object);
+}
+
+export function typeIsArray(type: ts.Type): boolean {
+  return typeIsObjectOrArray(type) && objectTypeIsArray(type);
+}
+
+export function typeIsObject(type: ts.Type): boolean {
+  return typeIsObjectOrArray(type) && !objectTypeIsArray(type);
 }
 
 const validAutogentsFlagNames = new Set([
@@ -81,4 +126,22 @@ export function hasAutogentsJSDocFlag(node: ts.Node, flagName: string) {
       return false;
     }
   });
+}
+
+function getTypeArguments(type: ts.Type): ts.Type[] | undefined {
+  return (type as any).typeArguments;
+}
+
+export function getArrayElementType(type: ts.Type): ts.Type {
+  if (!typeIsArray(type)) {
+    throw new Error("type must be array!");
+  }
+
+  const typeArguments = assertDefined(getTypeArguments(type));
+
+  if (typeArguments.length !== 1) {
+    throw new Error("expected exactly 1 type argument for Array");
+  } else {
+    return typeArguments[0];
+  }
 }

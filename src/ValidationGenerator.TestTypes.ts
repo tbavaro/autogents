@@ -57,6 +57,20 @@ export type SwitchedUnionFieldTestObject = (
 /**
  * @autogents validator
  */
+export type NumbersArrayTestObject = {
+  numbers: number[];
+};
+
+/**
+ * @autogents validator
+ */
+export type NumbersAndOrStringsArrayTestObject = {
+  numbersAndOrStrings: Array<number | string>;
+};
+
+/**
+ * @autogents validator
+ */
 export type JustANumberAlias = number;
 
 /**

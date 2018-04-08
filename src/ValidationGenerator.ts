@@ -140,9 +140,11 @@ function getValidatorForUnion(
 }
 
 function getTypeAliasIfPossible(type: ts.Type): string | undefined {
-  if (type.symbol && type.symbol.declarations) {
+  if (!TypescriptHelpers.typeIsArray(type) && type.symbol && type.symbol.declarations) {
     if (type.symbol.declarations.length !== 1) {
-      throw new Error(`don't know what to do with symbols with ${type.symbol.declarations.length} declarations`);
+      throw new Error(
+        `don't know what to do with symbols with ` +
+        `${type.symbol.declarations.length} declarations: ${type.symbol.name} ${type.flags}`);
     }
     const declaration = type.symbol.declarations[0];
     const parent = declaration.parent;
@@ -178,12 +180,21 @@ function getValidatorFor(
     }
   }
 
-  // console.log("getting validator for", path);
   const reusableValidatorEntry = reusableValidators.find(entry =>
     entry.predicate(type)
   );
   if (reusableValidatorEntry) {
     return reusableValidatorEntry.validator;
+  } else if (TypescriptHelpers.typeIsArray(type)) {
+    const elementType = TypescriptHelpers.getArrayElementType(type);
+    const elementValidator = getValidatorFor(
+      declarationNode,
+      elementType,
+      typeChecker,
+      path + "[]",
+      context
+    );
+    return new Validators.ArrayValidator(elementValidator);
   } else if (TypescriptHelpers.typeIsObject(type)) {
     return createObjectValidatorFor(
       declarationNode,
@@ -291,6 +302,10 @@ function serializeValidator(
       output.append(",");
     }
     output.append("])");
+  } else if (validator instanceof Validators.ArrayValidator) {
+    output.append("new ArrayValidator(");
+    serializeValidator(output, referencedUniqueIds, validator.elementValidator, uniqueIdToVariableNameMap);
+    output.append(")");
   } else if (validator instanceof Validators.TypeOfValidator) {
     output.append(`new TypeOfValidator(${s(validator.typeOfString)})`);
   } else if (validator instanceof Validators.ExactValueValidator) {
