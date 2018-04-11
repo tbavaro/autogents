@@ -30,7 +30,8 @@
     "test": "jest",
     "coverage": "jest --coverage",
     "watch": "npm run build -- --watch",
-    "watch:test": "jest --watch"
+    "watch:test": "jest --watch",
+    "push": "./node_modules/.bin/tsdevtools deploy"
   },
   "dependencies": {
     "@types/prettier": "^1.10.0",
