@@ -110,3 +110,18 @@ export type CycleTestObject2 = {
  * @autogents validator
  */
 export type NumberFieldTestObjectAlias = NumberFieldTestObject;
+
+/**
+ * @autogents validator
+ */
+export type NumberLiteralObject = 1;
+
+/**
+ * @autogents validator
+ */
+export type StringLiteralObject = "foo";
+
+/**
+ * @autogents validator
+ */
+export type MultipleStringLiteralObject = "foo" | "bar";

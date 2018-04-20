@@ -219,6 +219,9 @@ function getValidatorFor(
       return new Validators.ExactValueValidator(false);
     }
     throw new Error("expected boolean literal but I got this: " + JSON.stringify(typeChecker.getWidenedType(type)));
+  } else if (TypescriptHelpers.flagsMatch(type.flags, ts.TypeFlags.StringOrNumberLiteral)) {
+    const value = (type as ts.LiteralType).value;
+    return new Validators.ExactValueValidator(value);
   } else {
     const typeStr = typeChecker.typeToString(type);
     throw new Error(

@@ -246,6 +246,43 @@ createInputTests({
   ]
 });
 
+createInputTests({
+  symbol: "NumberLiteralObject",
+  validInputs: [
+    1
+  ],
+  invalidInputs: [
+    null,
+    0,
+    "foo"
+  ]
+});
+
+createInputTests({
+  symbol: "StringLiteralObject",
+  validInputs: [
+    "foo"
+  ],
+  invalidInputs: [
+    null,
+    0,
+    "bar"
+  ]
+});
+
+createInputTests({
+  symbol: "MultipleStringLiteralObject",
+  validInputs: [
+    "foo",
+    "bar"
+  ],
+  invalidInputs: [
+    null,
+    0,
+    "baz"
+  ]
+});
+
 it("pure alias types reuse the validator for the thing it's aliasing", () => {
   const originalValidator = getValidator("NumberFieldTestObject");
   const aliasValidator = getValidator("NumberFieldTestObjectAlias");
