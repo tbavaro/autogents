@@ -276,17 +276,17 @@ function serializeValidator(
   uniqueIdToVariableNameMap: Map<string, string>
 ): TypescriptCodeStringBuilder {
   if (validator === Validators.numberValidator) {
-    output.append("Validators.numberValidator");
+    output.append("V.numberValidator");
   } else if (validator === Validators.stringValidator) {
-    output.append("Validators.stringValidator");
+    output.append("V.stringValidator");
   } else if (validator === Validators.booleanValidator) {
-    output.append("Validators.booleanValidator");
+    output.append("V.booleanValidator");
   } else if (validator === Validators.nullValidator) {
-    output.append("Validators.nullValidator");
+    output.append("V.nullValidator");
   } else if (validator === Validators.undefinedValidator) {
-    output.append("Validators.undefinedValidator");
+    output.append("V.undefinedValidator");
   } else if (validator instanceof Validators.ObjectValidator) {
-    output.append("new ObjectValidator({");
+    output.append("new V.ObjectValidator({");
     for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
       output.append(`${s(pName)}: `);
       serializeValidator(
@@ -299,7 +299,7 @@ function serializeValidator(
     }
     output.append("})");
   } else if (validator instanceof Validators.OrValidator) {
-    output.append("new OrValidator([");
+    output.append("new V.OrValidator([");
     for (const subValidator of validator.validators) {
       serializeValidator(
         output,
@@ -311,13 +311,13 @@ function serializeValidator(
     }
     output.append("])");
   } else if (validator instanceof Validators.ArrayValidator) {
-    output.append("new ArrayValidator(");
+    output.append("new V.ArrayValidator(");
     serializeValidator(output, referencedUniqueIds, validator.elementValidator, uniqueIdToVariableNameMap);
     output.append(")");
   } else if (validator instanceof Validators.TypeOfValidator) {
-    output.append(`new TypeOfValidator(${s(validator.typeOfString)})`);
+    output.append(`new V.TypeOfValidator(${s(validator.typeOfString)})`);
   } else if (validator instanceof Validators.ExactValueValidator) {
-    output.append(`new ExactValueValidator(${s(validator.value)})`);
+    output.append(`new V.ExactValueValidator(${s(validator.value)})`);
   } else if (validator instanceof StubValidator) {
     const uniqueId = validator.key;
     const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
@@ -484,7 +484,7 @@ export default class ValidationGenerator {
     output.appendLines([
       "/* AUTO-GENERATED from autogents -- DO NOT EDIT! */",
       "",
-      'import * as Validator from "Validators";'
+      'import * as V from "tsvalidators";'
     ]);
 
     // declare the stubs first
@@ -492,7 +492,7 @@ export default class ValidationGenerator {
       output.appendSection("stubs", () => {
         output.append("const stubs = {");
         for (const variableName of stubbedVariableNames) {
-          output.append(`${variableName}: Stub.createStub<Validator>(),`);
+          output.append(`${variableName}: V.Stub.createStub<V.Validator>(),`);
         }
         output.append("};");
       });
@@ -503,7 +503,7 @@ export default class ValidationGenerator {
         output.append(`export const ${variableName} =`);
         const stubbed = stubbedVariableNames.has(variableName);
         if (stubbed) {
-          output.append(`Stub.assign(stubs.${variableName},`);
+          output.append(`V.Stub.assign(stubs.${variableName},`);
         }
         output.append(codeSnippet);
         if (stubbed) {

@@ -23,7 +23,7 @@ if (sourceFileNames.length < 1) {
 }
 
 const generator = new ValidationGenerator(sourceFileNames);
-const result = generator.serializeValidators() + "\n";
+const result = generator.serializeValidators();
 
 const encoding = "utf-8";
 if (argv.output) {
