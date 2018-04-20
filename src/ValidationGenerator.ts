@@ -33,7 +33,7 @@ export class StubValidator extends Validator {
   }
 
   public validate(input: any) {
-    this.delegate.validate(input);
+    return this.delegate.validate(input);
   }
 
   public describe() {

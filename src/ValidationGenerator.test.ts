@@ -1,4 +1,4 @@
-import { ValidationError, Validator } from "tsvalidators";
+import { Validator } from "tsvalidators";
 import * as Validators from "tsvalidators";
 import ValidationGenerator, { StubValidator } from "./ValidationGenerator";
 
@@ -35,7 +35,7 @@ function createInputTests(attrs: {
     const name = `valid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
       const validator = getValidator(attrs.symbol);
-      expect(() => validator.validate(input)).not.toThrow();
+      expect(validator.validate(input)).toBe(Validators.ValidationOK);
     });
   });
 
@@ -43,7 +43,7 @@ function createInputTests(attrs: {
     const name = `invalid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
       const validator = getValidator(attrs.symbol);
-      expect(() => validator.validate(input)).toThrowError(ValidationError);
+      expect(validator.validate(input)).not.toBe(Validators.ValidationOK);
     });
   });
 }
