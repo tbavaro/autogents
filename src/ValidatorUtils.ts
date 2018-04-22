@@ -97,6 +97,13 @@ const getOrCreateEntries = Utils.lazyInitialize(() => {
       }
     });
   });
+  entries.push({
+    predicate: (v: Validator) => v instanceof StubValidator,
+    name: "StubValidator",
+    isSingleton: false,
+    describe: (v: StubValidator) => v.describe(),
+    createInstantiationCall: (v: StubValidator, moduleName: string) => v.createInstantiationCall()
+  });
   return entries;
 });
 
@@ -124,4 +131,63 @@ export function instantiate(validator: Validator, moduleName: string): string {
 
 export function validatorNames(): string[] {
   return getOrCreateEntries().map(e => e.name);
+}
+
+// these get replaced by stub references in the generated output
+export class StubValidator implements Validator {
+  private privateDelegate?: Validator;
+
+  public readonly key: string;
+
+  set delegate(validator: Validator) {
+    if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
+      throw new Error("delegate can't be set twice");
+    } else {
+      this.privateDelegate = validator;
+    }
+  }
+
+  get delegate(): Validator {
+    if (this.privateDelegate === undefined) {
+      throw new Error("delegate is not set");
+    } else {
+      return this.privateDelegate;
+    }
+  }
+
+  constructor(key: string) {
+    this.key = key;
+  }
+
+  public validate(input: any, path: string) {
+    return this.delegate.validate(input, path);
+  }
+
+  public describe() {
+    return `StubValidator(${JSON.stringify(this.key)})`;
+  }
+
+  public createInstantiationCall() {
+    return `<${this.describe()}>`;
+  }
+
+  // TODO see if it's possible to make the key be exactly the final variable name, bypassing
+  // the need to do the remapping; will still need to search for references though if we want
+  // to optimize away unreferenced stubs
+  public static swapAndRecordReferences(
+    str: string,
+    referencedUniqueIds: Set<string>,
+    uniqueIdToVariableNameMap: Map<string, string>
+  ) {
+    return str.replace(/<StubValidator\(([^\)]*)\)>/g, (_, match) => {
+      match = JSON.parse(match);
+      const result = uniqueIdToVariableNameMap.get(match);
+      if (result === undefined) {
+        throw new Error(`no variable name found for key: ${match}`);
+      } else {
+        referencedUniqueIds.add(match);
+        return `stubs.${result}`;
+      }
+    });
+  }
 }

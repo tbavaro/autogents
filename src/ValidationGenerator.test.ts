@@ -1,6 +1,7 @@
 import { Validator } from "tsvalidators";
 import * as Validators from "tsvalidators";
-import ValidationGenerator, { StubValidator } from "./ValidationGenerator";
+import ValidationGenerator from "./ValidationGenerator";
+import { StubValidator } from "./ValidatorUtils";
 
 let generator: ValidationGenerator;
 const sourceFileName = "src/ValidationGenerator.TestTypes.ts";

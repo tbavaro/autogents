@@ -72,6 +72,12 @@ testForValidator({
   instantiation: "new V.ObjectValidator({a:V.nullValidator,b:new V.ExactValueValidator([1])})"
 });
 
+testForValidator({
+  validator: new ValidatorUtils.StubValidator("foo"),
+  description: "StubValidator(\"foo\")",
+  instantiation: "<StubValidator(\"foo\")>"
+});
+
 // it("describe: OrValidator", () => {
 //   const validator = new Validators.OrValidator([]);
 //   expect(ValidatorUtils.describe(validator)).toBe("OrValidator");

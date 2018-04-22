@@ -4,37 +4,8 @@ import * as ts from "typescript";
 import TypescriptCodeStringBuilder from "./TypescriptCodeStringBuilder";
 import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Utils from "./Utils";
-
-// these get replaced by stub references in the generated output
-export class StubValidator implements Validator {
-  private privateDelegate?: Validator;
-
-  public readonly key: string;
-
-  set delegate(validator: Validator) {
-    if (this.privateDelegate !== undefined && this.privateDelegate !== validator) {
-      throw new Error("delegate can't be set twice");
-    } else {
-      this.privateDelegate = validator;
-    }
-  }
-
-  get delegate(): Validator {
-    if (this.privateDelegate === undefined) {
-      throw new Error("delegate is not set");
-    } else {
-      return this.privateDelegate;
-    }
-  }
-
-  constructor(key: string) {
-    this.key = key;
-  }
-
-  public validate(input: any, path: string) {
-    return this.delegate.validate(input, path);
-  }
-}
+import { StubValidator } from "./ValidatorUtils";
+import * as ValidatorUtils from "./ValidatorUtils";
 
 class StubValidatorFactory {
   private unresolvedKeyToPTVMap: Map<string, StubValidator> = new Map();
@@ -257,69 +228,20 @@ function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
   }
 }
 
-function s(value: any): string {
-  return JSON.stringify(value);
-}
-
 function serializeValidator(
   output: TypescriptCodeStringBuilder,
   referencedUniqueIds: Set<string>,
   validator: Validator,
   uniqueIdToVariableNameMap: Map<string, string>
 ): TypescriptCodeStringBuilder {
-  if (validator === Validators.numberValidator) {
-    output.append("V.numberValidator");
-  } else if (validator === Validators.stringValidator) {
-    output.append("V.stringValidator");
-  } else if (validator === Validators.booleanValidator) {
-    output.append("V.booleanValidator");
-  } else if (validator === Validators.nullValidator) {
-    output.append("V.nullValidator");
-  } else if (validator === Validators.undefinedValidator) {
-    output.append("V.undefinedValidator");
-  } else if (validator instanceof Validators.ObjectValidator) {
-    output.append("new V.ObjectValidator({");
-    for (const [pName, pValidator] of Object.entries(validator.propertyValidators)) {
-      output.append(`${s(pName)}: `);
-      serializeValidator(
-        output,
-        referencedUniqueIds,
-        pValidator,
-        uniqueIdToVariableNameMap
-      );
-      output.append(",");
-    }
-    output.append("})");
-  } else if (validator instanceof Validators.OrValidator) {
-    output.append("new V.OrValidator([");
-    for (const subValidator of validator.validators) {
-      serializeValidator(
-        output,
-        referencedUniqueIds,
-        subValidator,
-        uniqueIdToVariableNameMap
-      );
-      output.append(",");
-    }
-    output.append("])");
-  } else if (validator instanceof Validators.ArrayValidator) {
-    output.append("new V.ArrayValidator(");
-    serializeValidator(output, referencedUniqueIds, validator.elementValidator, uniqueIdToVariableNameMap);
-    output.append(")");
-  } else if (validator instanceof Validators.TypeOfValidator) {
-    output.append(`new V.TypeOfValidator(${s(validator.typeOfString)})`);
-  } else if (validator instanceof Validators.ExactValueValidator) {
-    output.append(`new V.ExactValueValidator(${s(validator.values)})`);
-  } else if (validator instanceof StubValidator) {
-    const uniqueId = validator.key;
-    const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
-    output.append(`stubs.${variableName}`);
-    referencedUniqueIds.add(uniqueId);
-  } else {
-    throw new Error("unable to serialize validator: " + validator);
-  }
-
-  return output;
+  const rawSerializedString = ValidatorUtils.instantiate(validator, "V");
+  const fixedSerializedString =
+    StubValidator.swapAndRecordReferences(
+      rawSerializedString,
+      referencedUniqueIds,
+      uniqueIdToVariableNameMap
+    );
+  return output.append(fixedSerializedString);
 }
 
 export default class ValidationGenerator {
