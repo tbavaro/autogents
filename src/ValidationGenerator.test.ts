@@ -35,7 +35,7 @@ function createInputTests(attrs: {
     const name = `valid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
       const validator = getValidator(attrs.symbol);
-      expect(validator.validate(input)).toBe(Validators.ValidationOK);
+      expect(validator.validate(input, "$")).toBe(Validators.ValidationOK);
     });
   });
 
@@ -43,7 +43,7 @@ function createInputTests(attrs: {
     const name = `invalid input for "${attrs.symbol}": ${JSON.stringify(input)}`;
     it(name, () => {
       const validator = getValidator(attrs.symbol);
-      expect(validator.validate(input)).not.toBe(Validators.ValidationOK);
+      expect(validator.validate(input, "$")).not.toBe(Validators.ValidationOK);
     });
   });
 }

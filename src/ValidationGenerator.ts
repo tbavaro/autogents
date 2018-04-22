@@ -6,7 +6,7 @@ import * as TypescriptHelpers from "./TypescriptHelpers";
 import * as Utils from "./Utils";
 
 // these get replaced by stub references in the generated output
-export class StubValidator extends Validator {
+export class StubValidator implements Validator {
   private privateDelegate?: Validator;
 
   public readonly key: string;
@@ -28,19 +28,11 @@ export class StubValidator extends Validator {
   }
 
   constructor(key: string) {
-    super();
     this.key = key;
   }
 
-  public validate(input: any) {
-    return this.delegate.validate(input);
-  }
-
-  public describe() {
-    return Validator.describeHelper("PassThroughValidator", {
-      key: this.key,
-      delegateIsSet: (this.privateDelegate !== undefined)
-    });
+  public validate(input: any, path: string) {
+    return this.delegate.validate(input, path);
   }
 }
 
@@ -317,14 +309,14 @@ function serializeValidator(
   } else if (validator instanceof Validators.TypeOfValidator) {
     output.append(`new V.TypeOfValidator(${s(validator.typeOfString)})`);
   } else if (validator instanceof Validators.ExactValueValidator) {
-    output.append(`new V.ExactValueValidator(${s(validator.value)})`);
+    output.append(`new V.ExactValueValidator(${s(validator.values)})`);
   } else if (validator instanceof StubValidator) {
     const uniqueId = validator.key;
     const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
     output.append(`stubs.${variableName}`);
     referencedUniqueIds.add(uniqueId);
   } else {
-    throw new Error("unable to serialize validator: " + validator.describe().kind);
+    throw new Error("unable to serialize validator: " + validator);
   }
 
   return output;
