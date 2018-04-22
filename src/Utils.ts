@@ -64,3 +64,16 @@ export function assertDefined<T>(value: T | undefined): T {
   }
   return value;
 }
+
+export function lazyInitialize<T>(initializer: () => T): () => T {
+  let cachedValue: any;
+  let isInitialized = false;
+
+  return () => {
+    if (!isInitialized) {
+      cachedValue = initializer();
+      isInitialized = true;
+    }
+    return cachedValue;
+  };
+}
