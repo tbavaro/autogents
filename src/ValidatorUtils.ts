@@ -52,6 +52,20 @@ function serializeOrCallValidatorTransform(value: any, transform: (v: Validator)
   }
 }
 
+// NB: assumes that validators only have one field, and they are in the same order
+// as constructor args
+function getConstructorArguments(v: Validator): any[] {
+  const values = Object.values(v);
+  switch (values.length) {
+    case 0:
+    case 1:
+      return values;
+
+    default:
+      throw new Error("multiple fields not supported");
+  }
+}
+
 const getOrCreateEntries = Utils.lazyInitialize(() => {
   const entries: Array<ValidatorEntry<any>> = [];
   findSingletonValidatorNames().forEach(name => {
@@ -76,24 +90,13 @@ const getOrCreateEntries = Utils.lazyInitialize(() => {
         return `${name}(${serializedValues.slice(1, serializedValues.length - 1)})`;
       },
       createInstantiationCall: (v: Validator, moduleName: string) => {
-        const values = Object.values(v);
-        let constructorParams: string;
-        switch (values.length) {
-          case 0:
-            constructorParams = "";
-            break;
-
-          case 1:
-            constructorParams = serializeOrCallValidatorTransform(
-              values[0],
-              innerValidator => getEntryForValidator(innerValidator).createInstantiationCall(innerValidator, moduleName)
-            );
-            break;
-
-          default:
-            throw new Error("multiple fields not supported");
-        }
-        return `new ${moduleName}.${name}(${constructorParams})`;
+        const constructorParams = getConstructorArguments(v);
+        const serializedConstructorParams =
+          constructorParams.map(p => serializeOrCallValidatorTransform(
+            p,
+            innerValidator => getEntryForValidator(innerValidator).createInstantiationCall(innerValidator, moduleName)
+          )).join(",");
+        return `new ${moduleName}.${name}(${serializedConstructorParams})`;
       }
     });
   });
@@ -189,5 +192,96 @@ export class StubValidator implements Validator {
         return `stubs.${result}`;
       }
     });
+  }
+}
+
+function optimizeOrValidator(validator: Validators.OrValidator): Validator {
+  let isOptional = false;
+  const exactValues = new Set<any>();
+  const otherValidators = new Set<Validator>();
+
+  const remainingValidators = [ ...validator.validators ];
+  while(remainingValidators.length > 0) {
+    let v = Utils.assertDefined(remainingValidators.shift());
+    v = optimize(v);
+    if (v instanceof Validators.OptionalValidator) {
+      isOptional = true;
+      v = v.delegate;
+    }
+    if (v === Validators.undefinedValidator) {
+      isOptional = true;
+    } else if (v instanceof Validators.ExactValueValidator) {
+      if (getEntryForValidator(v).isSingleton) {
+        otherValidators.add(v);
+      } else {
+        v.values.forEach(e => {
+          if (e === undefined) {
+            isOptional = true;
+          } else {
+            exactValues.add(e);
+          }
+        });
+      }
+    } else if (v instanceof Validators.OrValidator) {
+      Utils.pushAll(remainingValidators, v.validators);
+    } else {
+      otherValidators.add(v);
+    }
+  }
+
+  if (exactValues.size > 0) {
+    otherValidators.add(new Validators.ExactValueValidator(Array.from(exactValues)));
+  }
+
+  // special case: was just Or([undefined])
+  if (otherValidators.size === 0 && isOptional) {
+    return Validators.undefinedValidator;
+  }
+
+  const otherValidatorsArray = Array.from(otherValidators);
+
+  const newValidator: Validator = (
+    otherValidatorsArray.length === 1
+      ? otherValidatorsArray[0]
+      : new Validators.OrValidator(otherValidatorsArray)
+  );
+
+  return isOptional ? new Validators.OptionalValidator(newValidator) : newValidator;
+}
+
+function optimizeMaybeValidatorLike(value: any): any {
+  if (isValidator(value)) {
+    return optimize(value);
+  } else if (isArray(value)) {
+    return value.map(optimizeMaybeValidatorLike);
+  } else if (isObject(value)) {
+    const result: { [key: string]: any } = {};
+    Object.keys(value).forEach(key => {
+      result[key] = optimizeMaybeValidatorLike(value[key]);
+    });
+    return result;
+  } else {
+    return value;
+  }
+}
+
+export function optimize(validator: Validator): Validator {
+  if (validator instanceof Validators.OrValidator) {
+    return optimizeOrValidator(validator);
+  } else if (validator instanceof StubValidator) {
+    return validator;
+  } else {
+    const entry = getEntryForValidator(validator);
+    if (entry.isSingleton) {
+      // assume singleton validators are already optimized
+      return validator;
+    } else {
+      const params = getConstructorArguments(validator).map(optimizeMaybeValidatorLike);
+      const obj = {};
+      const prototype = Object.getPrototypeOf(validator);
+      Object.setPrototypeOf(obj, prototype);
+      prototype.constructor.apply(obj, params);
+      return obj as Validator;
+    }
   }
 }

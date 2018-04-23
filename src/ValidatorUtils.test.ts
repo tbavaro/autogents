@@ -78,6 +78,106 @@ testForValidator({
   instantiation: "<StubValidator(\"foo\")>"
 });
 
+function serialize(validator: Validators.Validator): string {
+  return ValidatorUtils.instantiate(validator, "V");
+}
+
+function testOptimize(attrs: {
+  name?: string,
+  validator: Validators.Validator,
+  expectedOptimizedValidator: Validators.Validator
+}) {
+  attrs.name = attrs.name || ValidatorUtils.describe(attrs.validator);
+  it(`optimize: ${attrs.name}`, () => {
+    const optimizedValidator = ValidatorUtils.optimize(attrs.validator);
+    expect(serialize(optimizedValidator)).toBe(serialize(attrs.expectedOptimizedValidator));
+  });
+}
+
+testOptimize({
+  validator: Validators.nullValidator,
+  expectedOptimizedValidator: Validators.nullValidator
+});
+
+testOptimize({
+  validator: new Validators.ExactValueValidator([1]),
+  expectedOptimizedValidator: new Validators.ExactValueValidator([1])
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([]),
+  expectedOptimizedValidator: new Validators.OrValidator([])
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([Validators.undefinedValidator]),
+  expectedOptimizedValidator: Validators.undefinedValidator
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([Validators.undefinedValidator, Validators.undefinedValidator]),
+  expectedOptimizedValidator: Validators.undefinedValidator
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([Validators.undefinedValidator, Validators.nullValidator]),
+  expectedOptimizedValidator: new Validators.OptionalValidator(Validators.nullValidator)
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([Validators.undefinedValidator, Validators.numberValidator]),
+  expectedOptimizedValidator: new Validators.OptionalValidator(Validators.numberValidator)
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([
+    new Validators.ExactValueValidator([1]),
+    new Validators.ExactValueValidator([2])
+  ]),
+  expectedOptimizedValidator: new Validators.ExactValueValidator([1, 2])
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([
+    Validators.undefinedValidator,
+    new Validators.ExactValueValidator([1]),
+    new Validators.ExactValueValidator([2])
+  ]),
+  expectedOptimizedValidator: new Validators.OptionalValidator(new Validators.ExactValueValidator([1, 2]))
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([
+    Validators.undefinedValidator,
+    new Validators.ExactValueValidator([1]),
+    new Validators.OrValidator([
+      Validators.undefinedValidator,
+      new Validators.ExactValueValidator([2])
+    ])
+  ]),
+  expectedOptimizedValidator: new Validators.OptionalValidator(new Validators.ExactValueValidator([1, 2]))
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([
+    Validators.undefinedValidator,
+    new Validators.ExactValueValidator([1]),
+    new Validators.OrValidator([
+      Validators.undefinedValidator,
+      Validators.nullValidator,
+      new Validators.ExactValueValidator([2]),
+      new Validators.ExactValueValidator([3])
+    ])
+  ]),
+  expectedOptimizedValidator:
+    new Validators.OptionalValidator(
+      new Validators.OrValidator([
+        Validators.nullValidator,
+        new Validators.ExactValueValidator([1, 2, 3])
+      ])
+    )
+});
+
 // it("describe: OrValidator", () => {
 //   const validator = new Validators.OrValidator([]);
 //   expect(ValidatorUtils.describe(validator)).toBe("OrValidator");
