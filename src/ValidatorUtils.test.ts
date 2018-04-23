@@ -178,6 +178,24 @@ testOptimize({
     )
 });
 
+testOptimize({
+  validator: new Validators.OrValidator([new Validators.ExactValueValidator(true), new Validators.ExactValueValidator(false)]),
+  expectedOptimizedValidator: Validators.booleanValidator
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([new Validators.ExactValueValidator([true, false])]),
+  expectedOptimizedValidator: Validators.booleanValidator
+});
+
+testOptimize({
+  validator: new Validators.OrValidator([new Validators.ExactValueValidator([true, false, 1])]),
+  expectedOptimizedValidator: new Validators.OrValidator([
+    Validators.booleanValidator,
+    new Validators.ExactValueValidator([1])
+  ])
+});
+
 // it("describe: OrValidator", () => {
 //   const validator = new Validators.OrValidator([]);
 //   expect(ValidatorUtils.describe(validator)).toBe("OrValidator");

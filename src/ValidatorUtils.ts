@@ -229,6 +229,12 @@ function optimizeOrValidator(validator: Validators.OrValidator): Validator {
     }
   }
 
+  if (exactValues.has(true) && exactValues.has(false)) {
+    otherValidators.add(Validators.booleanValidator);
+    exactValues.delete(true);
+    exactValues.delete(false);
+  }
+
   if (exactValues.size > 0) {
     otherValidators.add(new Validators.ExactValueValidator(Array.from(exactValues)));
   }
@@ -247,6 +253,23 @@ function optimizeOrValidator(validator: Validators.OrValidator): Validator {
   );
 
   return isOptional ? new Validators.OptionalValidator(newValidator) : newValidator;
+}
+
+function optimizeExactValueValidator(validator: Validators.ExactValueValidator<any>): Validator {
+  const values = new Set(validator.values);
+  if (values.has(true) && values.has(false)) {
+    values.delete(true);
+    values.delete(false);
+    if (values.size === 0) {
+      return Validators.booleanValidator;
+    } else {
+      return new Validators.OrValidator([
+        Validators.booleanValidator,
+        new Validators.ExactValueValidator(Array.from(values))
+      ]);
+    }
+  }
+  return new Validators.ExactValueValidator(Array.from(values));
 }
 
 function optimizeMaybeValidatorLike(value: any): any {
@@ -275,6 +298,8 @@ export function optimize(validator: Validator): Validator {
     if (entry.isSingleton) {
       // assume singleton validators are already optimized
       return validator;
+    } else if (validator instanceof Validators.ExactValueValidator) {
+      return optimizeExactValueValidator(validator);
     } else {
       const params = getConstructorArguments(validator).map(optimizeMaybeValidatorLike);
       const obj = {};
