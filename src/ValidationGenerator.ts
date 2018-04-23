@@ -360,7 +360,7 @@ export default class ValidationGenerator {
     return output;
   }
 
-  public serializeValidators(): string {
+  public serializeValidators(optimize?: boolean): string {
     const uniqueIdToVariableNameMap = this.generateValidatorVariableNames();
 
     const variableNameToCodeSnippetMap = new Map<string, string>();
@@ -368,7 +368,11 @@ export default class ValidationGenerator {
 
     for (const innerMap of this.idMap.values()) {
       for (const uniqueId of innerMap.values()) {
-        const validator = Utils.assertDefined(this.validatorMap.get(uniqueId))();
+        let validator = Utils.assertDefined(this.validatorMap.get(uniqueId))();
+        if (optimize) {
+          validator = ValidatorUtils.optimize(validator);
+        }
+
         const variableName = Utils.assertDefined(uniqueIdToVariableNameMap.get(uniqueId));
 
         const variableOutput = new TypescriptCodeStringBuilder();
