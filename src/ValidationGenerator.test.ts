@@ -18,6 +18,8 @@ function getValidator(symbol: string): Validator {
   return generator.getValidator(sourceFileName, symbol);
 }
 
+import * as ValidatorUtils from "./ValidatorUtils";
+
 function createInputTests(attrs: {
   symbol: string,
   directValidatorTest?: (validator: Validator) => void,
@@ -295,3 +297,37 @@ it("pure alias types reuse the validator for the thing it's aliasing", () => {
   expect(aliasValidator).toBeInstanceOf(StubValidator);
   expect((aliasValidator as StubValidator).delegate).toBe(originalValidator);
 });
+
+function testValidatorGeneration(attrs: {
+  symbol: string,
+  expectedValidator: Validator,
+  extraName?: string
+}) {
+  const name = `generate: ${attrs.symbol}` + (attrs.extraName ? ` (${attrs.extraName})` : "");
+  it(name, () => {
+    const validator = getValidator(attrs.symbol);
+    expect(ValidatorUtils.describe(validator)).toBe(ValidatorUtils.describe(attrs.expectedValidator));
+  });
+}
+
+testValidatorGeneration({
+  symbol: "UsesNullableFieldTestObject",
+  expectedValidator: new Validators.ObjectValidator({
+    anObject: new ValidatorUtils.StubValidator("NumberFieldTestObject")
+  })
+});
+
+testValidatorGeneration({
+  symbol: "UsesMultipleStringLiteralObject",
+  expectedValidator: new Validators.ObjectValidator({
+    anObject: new ValidatorUtils.StubValidator("MultipleStringLiteralObject")
+  })
+});
+
+// TODO: couldn't find a way to keep this from being inlined :(
+// testValidatorGeneration({
+//   symbol: "UsesOptionalMultipleStringLiteralObject",
+//   expectedValidator: new Validators.ObjectValidator({
+//     anObject: new ValidatorUtils.StubValidator("MultipleStringLiteralObject")
+//   })
+// });

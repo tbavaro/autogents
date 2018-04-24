@@ -102,36 +102,18 @@ function getValidatorForUnion(
   return new Validators.OrValidator(validators);
 }
 
-function getTypeDeclarationIfPossible(type: ts.Type): ts.Node | undefined {
-  if (!type.symbol || !type.symbol.declarations) {
+function getTypeNameIfReference(type: ts.Type, typeChecker: ts.TypeChecker): string | undefined {
+  const typeNode = typeChecker.typeToTypeNode(type);
+  if (ts.isTypeReferenceNode(typeNode)) {
+    const typeName = typeNode.typeName;
+    if (ts.isIdentifier(typeName)) {
+      return ts.idText(typeName);
+    } else {
+      throw new Error(`unsupported typeName type: ${typeName.kind}`);
+    }
+  } else {
     return undefined;
   }
-
-  if (type.symbol.declarations.length !== 1) {
-    throw new Error(
-      `don't know what to do with symbols with ` +
-      `${type.symbol.declarations.length} declarations: ${type.symbol.name} ${type.flags}`);
-  }
-  const declaration = type.symbol.declarations[0];
-  return declaration.parent;
-}
-
-function getTypeAliasIfPossible(type: ts.Type): string | undefined {
-  if (!TypescriptHelpers.typeIsArray(type) && type.symbol && type.symbol.declarations) {
-    const parent = getTypeDeclarationIfPossible(type);
-    if (parent && ts.isTypeAliasDeclaration(parent)) {
-      return getUniqueIdentifierForTypeDeclaredAtNode(parent);
-      // return ts.idText(parent.name);
-    }
-    // console.log(
-    //   "declaration",
-    //   declaration.kind,
-    //   declaration.parent.kind,
-    //   ts.isTypeParameterDeclaration(declaration)
-    // );
-    // console.log("has symbol", type.symbol.declarations);
-  }
-  return undefined;
 }
 
 function getValidatorFor(
@@ -140,12 +122,12 @@ function getValidatorFor(
   typeChecker: ts.TypeChecker,
   path: string,
   context: Context,
-  isRoot?: boolean
+  isRoot?: boolean,
+  rootName?: string
 ): Validator {
-  const typeAliasOrUndefined = getTypeAliasIfPossible(type);
-  if (typeAliasOrUndefined !== undefined &&
-    (!isRoot || getTypeDeclarationIfPossible(type) !== declarationNode)) {
-    return context.ptvFactory.getOrCreatePTV(typeAliasOrUndefined);
+  const maybeReferencedTypeName = getTypeNameIfReference(type, typeChecker);
+  if (maybeReferencedTypeName !== undefined && (!isRoot || maybeReferencedTypeName !== rootName)) {
+    return context.ptvFactory.getOrCreatePTV(maybeReferencedTypeName);
   }
 
   const reusableValidatorEntry = reusableValidators.find(entry =>
@@ -205,27 +187,6 @@ function transformMapValues<K, V1, V2>(input: Map<K, V1>, transform: (v: V1) => 
     }
   }
   return output;
-}
-
-function getUniqueIdentifierForTypeDeclaredAtNode(node: ts.Node): string {
-  if (ts.isTypeAliasDeclaration(node)) {
-    const name = ts.idText(node.name);
-    // console.log("unique id", name);
-    let fullName = name;
-    let curNode: ts.Node | undefined = node;
-    while (curNode.parent) {
-      curNode = curNode.parent;
-      if (ts.isSourceFile(curNode)) {
-        fullName = curNode.fileName + ":" + fullName;
-      } else {
-        throw new Error("xcxc");
-      }
-      // console.log(curNode);
-    }
-    return fullName;
-  } else {
-    throw new Error("xcxc");
-  }
 }
 
 function serializeValidator(
@@ -297,11 +258,11 @@ export default class ValidationGenerator {
         );
       }
 
-      const uniqueId = getUniqueIdentifierForTypeDeclaredAtNode(stmt);
+      const uniqueId = name;
       symbolNamesToUniqueIdsMap.set(name, uniqueId);
 
       this.validatorMap.set(uniqueId, () => {
-        const validator = getValidatorFor(stmt, type, this.typeChecker, name, context, /*isRoot=*/true);
+        const validator = getValidatorFor(stmt, type, this.typeChecker, name, context, /*isRoot=*/true, name);
         // subsequent calls should just return this one;
         // set it first so we don't infinite loop if there's a cycle
         this.validatorMap.set(uniqueId, () => validator);

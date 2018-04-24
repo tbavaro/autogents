@@ -41,6 +41,13 @@ export type NullableFieldTestObject = {
 /**
  * @autogents validator
  */
+export type UsesNullableFieldTestObject = {
+  anObject: NumberFieldTestObject;
+};
+
+/**
+ * @autogents validator
+ */
 export type BooleanLiteralFieldTestObject = {
   mustBeFalse: false;
   optionalTrue?: true;
@@ -125,3 +132,17 @@ export type StringLiteralObject = "foo";
  * @autogents validator
  */
 export type MultipleStringLiteralObject = "foo" | "bar";
+
+/**
+ * @autogents validator
+ */
+export type UsesMultipleStringLiteralObject = {
+  anObject: MultipleStringLiteralObject;
+};
+
+/**
+ * @autogents validator
+ */
+export type UsesOptionalMultipleStringLiteralObject = {
+  anObject?: MultipleStringLiteralObject;
+};
