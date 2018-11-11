@@ -89,7 +89,7 @@ function objectTypeIsArray(type: ts.Type): boolean {
   }
 
   const declarations = assertDefined(type.symbol.declarations);
-  return declarations.every(d => d.getSourceFile().fileName.endsWith("typescript/lib/lib.d.ts"));
+  return declarations.every(d => d.getSourceFile().fileName.match(/typescript\/lib\/lib\.([0-9a-z]*\.)?d\.ts$/) !== null);
 }
 
 function typeIsObjectOrArray(type: ts.Type): boolean {

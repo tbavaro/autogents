@@ -104,7 +104,7 @@ function getValidatorForUnion(
 
 function getTypeNameIfReference(type: ts.Type, typeChecker: ts.TypeChecker): string | undefined {
   const typeNode = typeChecker.typeToTypeNode(type);
-  if (ts.isTypeReferenceNode(typeNode)) {
+  if (typeNode !== undefined && ts.isTypeReferenceNode(typeNode)) {
     const typeName = typeNode.typeName;
     if (ts.isIdentifier(typeName)) {
       return ts.idText(typeName);
