@@ -87,9 +87,8 @@ function objectTypeIsArray(type: ts.Type): boolean {
   if (!type.symbol || type.symbol.name !== "Array") {
     return false;
   }
-
   const declarations = assertDefined(type.symbol.declarations);
-  return declarations.every(d => d.getSourceFile().fileName.match(/typescript\/lib\/lib\.([0-9a-z]*\.)?d\.ts$/) !== null);
+  return declarations.every(d => d.getSourceFile().fileName.match(/typescript\/lib\/lib\.([0-9a-z]*\.)*d\.ts$/) !== null);
 }
 
 function typeIsObjectOrArray(type: ts.Type): boolean {
