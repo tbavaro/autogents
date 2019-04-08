@@ -34,6 +34,7 @@
     "push": "./node_modules/.bin/tsdevtools deploy"
   },
   "dependencies": {
+    "@types/node": "^8.10.45",
     "@types/prettier": "^1.16.1",
     "prettier": "^1.16.4",
     "tsvalidators": "github:tbavaro/tsvalidators#dist",
@@ -42,7 +43,6 @@
   },
   "devDependencies": {
     "@types/jest": "^22.2.3",
-    "@types/node": "^8.10.45",
     "@types/yargs": "^11.1.2",
     "coveralls": "^3.0.3",
     "jest": "^23.6.0",
